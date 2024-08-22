@@ -1,0 +1,899 @@
+CREATE OR REPLACE FUNCTION public.applicantlist(_status character varying, _offset integer, _limit integer, _intakeagency character varying, _county character varying, _sortcolumn character varying, _sortorder character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total int4;
+
+declare offsetValue int4 = 10;
+
+begin
+
+    offsetValue = offsetValue * _offset;
+
+
+
+if _offset = 0 then
+
+
+
+select count(t1) from
+
+(
+
+select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "applicationnumber"
+
+, concat(a."ApplicantFirstName",' ',a."ApplicantLastName") as "applicantname"
+
+, a2."CreateDate" as "receiveddate"
+
+, rc."CountyName" as "countyname"
+
+, rp."PriorityDescription" as "type"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+join dbo."Family" f on a."ApplicantGenId" = f."ApplicantGenId" and a2."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+left join public.case_by_scanstatus cbs on cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+where case when lower(_status) = lower('inprogress') then
+
+a2."ScanStatusGenId" in (2,4,5)
+
+and a2."ApplicationSignedDate"::date between '10-01-2018'::date and  current_date
+
+when lower(_status) = lower('closed') then
+
+a2."ScanStatusGenId" in (3,9)
+
+else true end
+
+and case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and f."HasJobSearch" is not true
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+-- and case when (select count(*) from public.ais_applicationversionscandetail where "CaseNumber"= a2."ApplicantGenId" and "CaseSeqNumber"  = a2."ApplicationSequence" and "ScanStatusCode" in (279,282,3,9)) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+group by a2."ApplicantGenId" ,a2."ApplicationSequence" ,a."ApplicantFirstName" ,a."ApplicantGenId" ,a."ApplicantLastName" ,a2."CreateDate" ,rc."CountyName" ,rp."PriorityDescription"
+
+)t1
+
+into total;
+
+
+
+else
+
+
+
+total = 0;
+
+
+
+end if;
+
+
+
+if _sortcolumn = 'applicationnumber' then
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+    select Json_agg(row_to_json(t1)) from (select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "applicationnumber"
+
+, concat(a."ApplicantFirstName",' ',a."ApplicantLastName") as "applicantname"
+
+, a2."CreateDate" as "receiveddate"
+
+, rc."CountyName" as "countyname"
+
+, rp."PriorityDescription" as "type"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+join dbo."Family" f on a."ApplicantGenId" = f."ApplicantGenId" and a2."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+left join public.case_by_scanstatus cbs on cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+where case when lower(_status) = lower('inprogress') then
+
+a2."ScanStatusGenId" in (2,4,5)
+
+and a2."ApplicationSignedDate"::date between '10-01-2018'::date and  current_date
+
+when lower(_status) = lower('closed') then
+
+a2."ScanStatusGenId" in (3,9)
+
+else true end
+
+and case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and f."HasJobSearch" is not true
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+-- and case when (select count(*) from public.ais_applicationversionscandetail where "CaseNumber"= a2."ApplicantGenId" and "CaseSeqNumber"  = a2."ApplicationSequence" and "ScanStatusCode" in (279,282,3,9)) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+group by a2."ApplicantGenId" ,a2."ApplicationSequence" ,a."ApplicantFirstName" ,a."ApplicantGenId" ,a."ApplicantLastName" ,a2."CreateDate" ,rc."CountyName" ,rp."PriorityDescription"
+
+    order by a."ApplicantGenId" asc,a2."ApplicationSequence" asc
+
+    limit _limit
+
+    offset offsetValue)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+    select Json_agg(row_to_json(t1)) from (select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "applicationnumber"
+
+, concat(a."ApplicantFirstName",' ',a."ApplicantLastName") as "applicantname"
+
+, a2."CreateDate" as "receiveddate"
+
+, rc."CountyName" as "countyname"
+
+, rp."PriorityDescription" as "type"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+join dbo."Family" f on a."ApplicantGenId" = f."ApplicantGenId" and a2."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+left join public.case_by_scanstatus cbs on cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+where case when lower(_status) = lower('inprogress') then
+
+a2."ScanStatusGenId" in (2,4,5)
+
+and a2."ApplicationSignedDate"::date between '10-01-2018'::date and  current_date
+
+when lower(_status) = lower('closed') then
+
+a2."ScanStatusGenId" in (3,9)
+
+else true end
+
+and case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and f."HasJobSearch" is not true
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+-- and case when (select count(*) from public.ais_applicationversionscandetail where "CaseNumber"= a2."ApplicantGenId" and "CaseSeqNumber"  = a2."ApplicationSequence" and "ScanStatusCode" in (279,282,3,9)) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+group by a2."ApplicantGenId" ,a2."ApplicationSequence" ,a."ApplicantFirstName" ,a."ApplicantGenId" ,a."ApplicantLastName" ,a2."CreateDate" ,rc."CountyName" ,rp."PriorityDescription"
+
+order by a."ApplicantGenId" desc,a2."ApplicationSequence" desc
+
+    limit _limit
+
+    offset offsetValue)t1 into result;
+
+
+
+end if;
+
+
+
+elsif _sortcolumn ='applicantname' then
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+    select Json_agg(row_to_json(t1)) from (select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "applicationnumber"
+
+, concat(a."ApplicantFirstName",' ',a."ApplicantLastName") as "applicantname"
+
+, a2."CreateDate" as "receiveddate"
+
+, rc."CountyName" as "countyname"
+
+, rp."PriorityDescription" as "type"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+join dbo."Family" f on a."ApplicantGenId" = f."ApplicantGenId" and a2."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+left join public.case_by_scanstatus cbs on cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+where case when lower(_status) = lower('inprogress') then
+
+a2."ScanStatusGenId" in (2,4,5)
+
+and a2."ApplicationSignedDate"::date between '10-01-2018'::date and  current_date
+
+when lower(_status) = lower('closed') then
+
+a2."ScanStatusGenId" in (3,9)
+
+else true end
+
+and case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and f."HasJobSearch" is not true
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+-- and case when (select count(*) from public.ais_applicationversionscandetail where "CaseNumber"= a2."ApplicantGenId" and "CaseSeqNumber"  = a2."ApplicationSequence" and "ScanStatusCode" in (279,282,3,9)) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+group by a2."ApplicantGenId" ,a2."ApplicationSequence" ,a."ApplicantFirstName" ,a."ApplicantGenId" ,a."ApplicantLastName" ,a2."CreateDate" ,rc."CountyName" ,rp."PriorityDescription"
+
+order by applicantname asc
+
+    limit _limit
+
+    offset offsetValue)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+    select Json_agg(row_to_json(t1)) from (select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "applicationnumber"
+
+, concat(a."ApplicantFirstName",' ',a."ApplicantLastName") as "applicantname"
+
+, a2."CreateDate" as "receiveddate"
+
+, rc."CountyName" as "countyname"
+
+, rp."PriorityDescription" as "type"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+join dbo."Family" f on a."ApplicantGenId" = f."ApplicantGenId" and a2."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+left join public.case_by_scanstatus cbs on cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+where case when lower(_status) = lower('inprogress') then
+
+a2."ScanStatusGenId" in (2,4,5)
+
+and a2."ApplicationSignedDate"::date between '10-01-2018'::date and  current_date
+
+when lower(_status) = lower('closed') then
+
+a2."ScanStatusGenId" in (3,9)
+
+else true end
+
+and case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and f."HasJobSearch" is not true
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+-- and case when (select count(*) from public.ais_applicationversionscandetail where "CaseNumber"= a2."ApplicantGenId" and "CaseSeqNumber"  = a2."ApplicationSequence" and "ScanStatusCode" in (279,282,3,9)) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+group by a2."ApplicantGenId" ,a2."ApplicationSequence" ,a."ApplicantFirstName" ,a."ApplicantGenId" ,a."ApplicantLastName" ,a2."CreateDate" ,rc."CountyName" ,rp."PriorityDescription"
+
+order by applicantname desc
+
+    limit _limit
+
+    offset offsetValue)t1 into result;
+
+
+
+end if;
+
+
+
+elsif _sortcolumn ='receiveddate' then
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+    select Json_agg(row_to_json(t1)) from (select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "applicationnumber"
+
+, concat(a."ApplicantFirstName",' ',a."ApplicantLastName") as "applicantname"
+
+, a2."CreateDate" as "receiveddate"
+
+, rc."CountyName" as "countyname"
+
+, rp."PriorityDescription" as "type"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+join dbo."Family" f on a."ApplicantGenId" = f."ApplicantGenId" and a2."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+left join public.case_by_scanstatus cbs on cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+where case when lower(_status) = lower('inprogress') then
+
+a2."ScanStatusGenId" in (2,4,5)
+
+and a2."ApplicationSignedDate"::date between '10-01-2018'::date and  current_date
+
+when lower(_status) = lower('closed') then
+
+a2."ScanStatusGenId" in (3,9)
+
+else true end
+
+and case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and f."HasJobSearch" is not true
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+-- and case when (select count(*) from public.ais_applicationversionscandetail where "CaseNumber"= a2."ApplicantGenId" and "CaseSeqNumber"  = a2."ApplicationSequence" and "ScanStatusCode" in (279,282,3,9)) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+group by a2."ApplicantGenId" ,a2."ApplicationSequence" ,a."ApplicantFirstName" ,a."ApplicantGenId" ,a."ApplicantLastName" ,a2."CreateDate" ,rc."CountyName" ,rp."PriorityDescription"
+
+order by receiveddate asc
+
+    limit _limit
+
+    offset offsetValue)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+    select Json_agg(row_to_json(t1)) from (select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "applicationnumber"
+
+, concat(a."ApplicantFirstName",' ',a."ApplicantLastName") as "applicantname"
+
+, a2."CreateDate" as "receiveddate"
+
+, rc."CountyName" as "countyname"
+
+, rp."PriorityDescription" as "type"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+join dbo."Family" f on a."ApplicantGenId" = f."ApplicantGenId" and a2."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+left join public.case_by_scanstatus cbs on cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+where case when lower(_status) = lower('inprogress') then
+
+a2."ScanStatusGenId" in (2,4,5)
+
+and a2."ApplicationSignedDate"::date between '10-01-2018'::date and  current_date
+
+when lower(_status) = lower('closed') then
+
+a2."ScanStatusGenId" in (3,9)
+
+else true end
+
+and case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and f."HasJobSearch" is not true
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+-- and case when (select count(*) from public.ais_applicationversionscandetail where "CaseNumber"= a2."ApplicantGenId" and "CaseSeqNumber"  = a2."ApplicationSequence" and "ScanStatusCode" in (279,282,3,9)) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+group by a2."ApplicantGenId" ,a2."ApplicationSequence" ,a."ApplicantFirstName" ,a."ApplicantGenId" ,a."ApplicantLastName" ,a2."CreateDate" ,rc."CountyName" ,rp."PriorityDescription"
+
+order by receiveddate desc
+
+    limit _limit
+
+    offset offsetValue)t1 into result;
+
+
+
+end if;
+
+
+
+elsif _sortcolumn ='countyname' then
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+    select Json_agg(row_to_json(t1)) from (select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "applicationnumber"
+
+, concat(a."ApplicantFirstName",' ',a."ApplicantLastName") as "applicantname"
+
+, a2."CreateDate" as "receiveddate"
+
+, rc."CountyName" as "countyname"
+
+, rp."PriorityDescription" as "type"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+join dbo."Family" f on a."ApplicantGenId" = f."ApplicantGenId" and a2."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+left join public.case_by_scanstatus cbs on cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+where case when lower(_status) = lower('inprogress') then
+
+a2."ScanStatusGenId" in (2,4,5)
+
+and a2."ApplicationSignedDate"::date between '10-01-2018'::date and  current_date
+
+when lower(_status) = lower('closed') then
+
+a2."ScanStatusGenId" in (3,9)
+
+else true end
+
+and case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and f."HasJobSearch" is not true
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+-- and case when (select count(*) from public.ais_applicationversionscandetail where "CaseNumber"= a2."ApplicantGenId" and "CaseSeqNumber"  = a2."ApplicationSequence" and "ScanStatusCode" in (279,282,3,9)) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+group by a2."ApplicantGenId" ,a2."ApplicationSequence" ,a."ApplicantFirstName" ,a."ApplicantGenId" ,a."ApplicantLastName" ,a2."CreateDate" ,rc."CountyName" ,rp."PriorityDescription"
+
+order by countyname asc
+
+    limit _limit
+
+    offset offsetValue)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+    select Json_agg(row_to_json(t1)) from (select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "applicationnumber"
+
+, concat(a."ApplicantFirstName",' ',a."ApplicantLastName") as "applicantname"
+
+, a2."CreateDate" as "receiveddate"
+
+, rc."CountyName" as "countyname"
+
+, rp."PriorityDescription" as "type"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+join dbo."Family" f on a."ApplicantGenId" = f."ApplicantGenId" and a2."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+left join public.case_by_scanstatus cbs on cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+where case when lower(_status) = lower('inprogress') then
+
+a2."ScanStatusGenId" in (2,4,5)
+
+and a2."ApplicationSignedDate"::date between '10-01-2018'::date and  current_date
+
+when lower(_status) = lower('closed') then
+
+a2."ScanStatusGenId" in (3,9)
+
+else true end
+
+and case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and f."HasJobSearch" is not true
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+-- and case when (select count(*) from public.ais_applicationversionscandetail where "CaseNumber"= a2."ApplicantGenId" and "CaseSeqNumber"  = a2."ApplicationSequence" and "ScanStatusCode" in (279,282,3,9)) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+group by a2."ApplicantGenId" ,a2."ApplicationSequence" ,a."ApplicantFirstName" ,a."ApplicantGenId" ,a."ApplicantLastName" ,a2."CreateDate" ,rc."CountyName" ,rp."PriorityDescription"
+
+order by countyname desc
+
+    limit _limit
+
+    offset offsetValue)t1 into result;
+
+
+
+end if;
+
+
+
+elsif _sortcolumn ='type' then
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+    select Json_agg(row_to_json(t1)) from (select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "applicationnumber"
+
+, concat(a."ApplicantFirstName",' ',a."ApplicantLastName") as "applicantname"
+
+, a2."CreateDate" as "receiveddate"
+
+, rc."CountyName" as "countyname"
+
+, rp."PriorityDescription" as "type"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+join dbo."Family" f on a."ApplicantGenId" = f."ApplicantGenId" and a2."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+left join public.case_by_scanstatus cbs on cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+where case when lower(_status) = lower('inprogress') then
+
+a2."ScanStatusGenId" in (2,4,5)
+
+and a2."ApplicationSignedDate"::date between '10-01-2018'::date and  current_date
+
+when lower(_status) = lower('closed') then
+
+a2."ScanStatusGenId" in (3,9)
+
+else true end
+
+and case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and f."HasJobSearch" is not true
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+-- and case when (select count(*) from public.ais_applicationversionscandetail where "CaseNumber"= a2."ApplicantGenId" and "CaseSeqNumber"  = a2."ApplicationSequence" and "ScanStatusCode" in (279,282,3,9)) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+group by a2."ApplicantGenId" ,a2."ApplicationSequence" ,a."ApplicantFirstName" ,a."ApplicantGenId" ,a."ApplicantLastName" ,a2."CreateDate" ,rc."CountyName" ,rp."PriorityDescription"
+
+order by type asc
+
+    limit _limit
+
+    offset offsetValue)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+    select Json_agg(row_to_json(t1)) from (select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "applicationnumber"
+
+, concat(a."ApplicantFirstName",' ',a."ApplicantLastName") as "applicantname"
+
+, a2."CreateDate" as "receiveddate"
+
+, rc."CountyName" as "countyname"
+
+, rp."PriorityDescription" as "type"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+join dbo."Family" f on a."ApplicantGenId" = f."ApplicantGenId" and a2."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+left join public.case_by_scanstatus cbs on cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+where case when lower(_status) = lower('inprogress') then
+
+a2."ScanStatusGenId" in (2,4,5)
+
+and a2."ApplicationSignedDate"::date between '10-01-2018'::date and  current_date
+
+when lower(_status) = lower('closed') then
+
+a2."ScanStatusGenId" in (3,9)
+
+else true end
+
+and case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and f."HasJobSearch" is not true
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+-- and case when (select count(*) from public.ais_applicationversionscandetail where "CaseNumber"= a2."ApplicantGenId" and "CaseSeqNumber"  = a2."ApplicationSequence" and "ScanStatusCode" in (279,282,3,9)) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+group by a2."ApplicantGenId" ,a2."ApplicationSequence" ,a."ApplicantFirstName" ,a."ApplicantGenId" ,a."ApplicantLastName" ,a2."CreateDate" ,rc."CountyName" ,rp."PriorityDescription"
+
+order by type desc
+
+    limit _limit
+
+    offset offsetValue)t1 into result;
+
+
+
+end if;
+
+
+
+ELSE
+
+
+
+select Json_agg(row_to_json(t1)) from (select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "applicationnumber"
+
+, concat(a."ApplicantFirstName",' ',a."ApplicantLastName") as "applicantname"
+
+, a2."CreateDate" as "receiveddate"
+
+, rc."CountyName" as "countyname"
+
+, rp."PriorityDescription" as "type"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+join dbo."Family" f on a."ApplicantGenId" = f."ApplicantGenId" and a2."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+left join public.case_by_scanstatus cbs on cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+where case when lower(_status) = lower('inprogress') then
+
+a2."ScanStatusGenId" in (2,4,5)
+
+and a2."ApplicationSignedDate"::date between '10-01-2018'::date and  current_date
+
+when lower(_status) = lower('closed') then
+
+a2."ScanStatusGenId" in (3,9)
+
+else true end
+
+and case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and f."HasJobSearch" is not true
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+-- and case when (select count(*) from public.ais_applicationversionscandetail where "CaseNumber"= a2."ApplicantGenId" and "CaseSeqNumber"  = a2."ApplicationSequence" and "ScanStatusCode" in (279,282,3,9)) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+group by a2."ApplicantGenId" ,a2."ApplicationSequence" ,a."ApplicantFirstName" ,a."ApplicantGenId" ,a."ApplicantLastName" ,a2."CreateDate" ,rc."CountyName" ,rp."PriorityDescription"
+
+    limit _limit
+
+    offset offsetValue)t1 into result;
+
+
+
+end if;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('totalCount',total,'data',coalesce(result,'[]'))),'[]');
+
+
+
+ END;
+
+ $function$
+

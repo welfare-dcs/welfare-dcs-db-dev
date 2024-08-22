@@ -1,0 +1,349 @@
+CREATE OR REPLACE FUNCTION public.jobsearch(_offset integer, _limit integer, _casenumber character varying, _county character varying, _scanstatus character varying, _startdate character varying, _enddate character varying, _sortcolumn character varying, _sortorder character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total int4:=0;
+
+declare offsetValue int4 = 10;
+
+
+
+begin
+
+
+
+    offsetValue = offsetValue * _offset;
+
+
+
+if _offset = 0 then
+
+
+
+select
+
+count(t)
+
+from
+
+(
+
+select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "casenumber"
+
+, concat(a."ApplicantFirstName",' ',a."ApplicantLastName") as "applicantname"
+
+, a2."ApplicationSignedDate" as "applicationdate"
+
+, e."CreateDate"::date + interval '5 day' as "duedate"
+
+,fsu.firstname
+
+,fsu.lastname as "lockedby"
+
+, rc."CountyName" as "countyname"
+
+, rss."ScanStatusDescription" as "scanstatus"
+
+, ms."ReviewedDate" as "reviewed_date"
+
+, ms."ReviewedBy"
+
+-- , coalesce((select Json_agg(row_to_json(t1)) from (
+
+-- select
+
+-- concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+-- , e."CreateDate"::date as "errordate"
+
+-- from dbo."Error" e
+
+-- left join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+-- where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId"
+
+-- and e."ApprovedInd" is not true
+
+-- and e."RemovedByPolicy" is null
+
+-- and e."CannotBeCorrected" is null
+
+-- and e."FixDate" is null
+
+-- and e.errorstatus is true
+
+-- group by error,errordate, et.errornumber, et.sort
+
+-- order by  et.errornumber asc , et.sort asc
+
+-- )t1),'[]') as "subData"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId" and a2."ScanStatusGenId" in (4) and a2."TerminationDate" is null and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") = _casenumber end
+
+and case when _startdate = '' and _enddate = '' then true else a2."ApplicationSignedDate"::date between to_date(_startdate, 'dd-mm-yyyy') and to_date(_enddate, 'dd-mm-yyyy') end
+
+join dbo."MonitoringSequence" ms on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+inner join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Family" f on ms."ApplicantGenId" = f."ApplicantGenId" and ms."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+inner join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+left join dbo."ReviewLock" r1 on  r1."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."ReviewHistory" rh on rh."ReviewHistoryGenId" = r1."ReviewHistoryGenId"
+
+left join fssauser fsu on rh."UserGenId" = fsu.id
+
+left join public.case_by_scanstatus cbs on  cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+left join dbo."ref_ScanStatus" rss on a2."ScanStatusGenId" = rss."ScanStatusGenId"
+
+where
+
+case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and
+
+case when f."HasJobSearch" is not null then
+
+   case when (select count(*) from dbo."Family" f2 where f2."ApplicantGenId" = f."ApplicantGenId" and f2."ApplicationSequence" = f."ApplicationSequence" and f2."ApplicantRelationshipGenId" in (4,5,6,7,20)) > 0 then
+
+      case when (select count(*) from dbo."Family" f2 where f2."ApplicantGenId" = f."ApplicantGenId" and f2."ApplicationSequence" = f."ApplicationSequence" and f2."ApplicantRelationshipGenId" in (4,5,6,7,20) and f2."HasJobSearch" is not false) > 0 then
+
+         case when f."ApplicantRelationshipGenId" in (1) and f."HasJobSearch" is true then
+
+             true
+
+         end
+
+      end
+
+   else
+
+      case when f."ApplicantRelationshipGenId" in (1) and f."HasJobSearch" is true then
+
+          true
+
+      end
+
+   end
+
+end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and case when _scanStatus = '' then true else rss."ScanStatusGenId" = any(_scanStatus::int[]) end
+
+group by  fsu.firstname,fsu.lastname,a."ApplicantFirstName" ,a."ApplicantLastName" ,a2."ApplicationSignedDate" ,a2."ApplicantGenId",a2."ApplicationSequence",rss."ScanStatusDescription" , rc."CountyName" , e."CreateDate"::date + interval '5 day', ms."MonitoringSequenceGenId", ms."ReviewedDate",ms."ReviewedBy"
+
+)t into total;
+
+
+
+end if;
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "casenumber"
+
+, concat(a."ApplicantFirstName",' ',a."ApplicantLastName") as "applicantname"
+
+, a2."ApplicationSignedDate" as "applicationdate",a2."LastBatchDate"
+
+, e."CreateDate"::date + interval '5 day' as "duedate"
+
+,fsu.firstname
+
+,fsu.lastname as "lockedby"
+
+, rc."CountyName" as "countyname"
+
+, rss."ScanStatusDescription" as "scanstatus"
+
+, ms."ReviewedDate" as "reviewed_date"
+
+, (select concat(f1.lastname ,' ',f1.firstname) from public.fssauser f1 where ms."ReviewedBy" = f1.id) as "reviewed_by"
+
+, coalesce((select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+, e."CreateDate"::date as "errordate"
+
+from dbo."Error" e
+
+left join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId"
+
+and e."ApprovedInd" is not true
+
+and e."RemovedByPolicy" is null
+
+and e."CannotBeCorrected" is null
+
+and e."FixDate" is null
+
+and e.errorstatus is true
+
+group by error,errordate, et.errornumber, et.sort
+
+order by  et.errornumber asc , et.sort asc
+
+)t1),'[]') as "subData"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId" and a2."ScanStatusGenId" in (4) and a2."TerminationDate" is null and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") = _casenumber end
+
+and case when _startdate = '' and _enddate = '' then true else a2."ApplicationSignedDate"::date between to_date(_startdate, 'dd-mm-yyyy') and to_date(_enddate, 'dd-mm-yyyy') end
+
+join dbo."MonitoringSequence" ms on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+inner join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Family" f on ms."ApplicantGenId" = f."ApplicantGenId" and ms."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+inner join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+left join dbo."ReviewLock" r1 on  r1."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."ReviewHistory" rh on rh."ReviewHistoryGenId" = r1."ReviewHistoryGenId"
+
+left join fssauser fsu on rh."UserGenId" = fsu.id
+
+left join public.case_by_scanstatus cbs on  cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+left join dbo."ref_ScanStatus" rss on a2."ScanStatusGenId" = rss."ScanStatusGenId"
+
+where
+
+case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and
+
+case when f."HasJobSearch" is not null then
+
+   case when (select count(*) from dbo."Family" f2 where f2."ApplicantGenId" = f."ApplicantGenId" and f2."ApplicationSequence" = f."ApplicationSequence" and f2."ApplicantRelationshipGenId" in (4,5,6,7,20)) > 0 then
+
+      case when (select count(*) from dbo."Family" f2 where f2."ApplicantGenId" = f."ApplicantGenId" and f2."ApplicationSequence" = f."ApplicationSequence" and f2."ApplicantRelationshipGenId" in (4,5,6,7,20) and f2."HasJobSearch" is not false) > 0 then
+
+         case when f."ApplicantRelationshipGenId" in (1) and f."HasJobSearch" is true then
+
+             true
+
+         end
+
+      end
+
+   else
+
+      case when f."ApplicantRelationshipGenId" in (1) and f."HasJobSearch" is true then
+
+          true
+
+      end
+
+   end
+
+end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and case when _scanStatus = '' then true else rss."ScanStatusGenId" = any(_scanStatus::int[]) end
+
+group by  fsu.firstname,fsu.lastname,a."ApplicantFirstName" ,a."ApplicantLastName" ,a2."LastBatchDate",a2."ApplicationSignedDate" ,a2."ApplicantGenId",a2."ApplicationSequence",rss."ScanStatusDescription" , rc."CountyName" , e."CreateDate"::date + interval '5 day', ms."MonitoringSequenceGenId", ms."ReviewedDate"
+
+, (select concat(f1.lastname ,' ',f1.firstname) from public.fssauser f1 where ms."ReviewedBy" = f1.id)
+
+order by
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('casenumber') then a2."ApplicantGenId" end) asc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('casenumber') then a2."ApplicationSequence" end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('casenumber') then a2."ApplicantGenId" end) desc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('casenumber') then a2."ApplicationSequence" end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('applicantname') then concat(a."ApplicantFirstName",' ', a."ApplicantLastName") end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('applicantname') then concat(a."ApplicantFirstName",' ', a."ApplicantLastName") end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('applicationdate') then a2."ApplicationSignedDate" end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('applicationdate') then a2."ApplicationSignedDate" end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('duedate') then e."CreateDate"::date + interval '5 day' end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('duedate') then e."CreateDate"::date + interval '5 day' end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('countyname') then rc."CountyName" end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('countyname') then rc."CountyName" end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('scanstatus') then rss."ScanStatusDescription" end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('scanstatus') then rss."ScanStatusDescription" end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('lockedby') then fsu.lastname end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('lockedby') then fsu.lastname end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('reviewed_date') then ms."ReviewedDate" end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('reviewed_date') then ms."ReviewedDate" end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('lastbatchdate') then a2."LastBatchDate" end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('lastbatchdate') then a2."LastBatchDate" end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('reviewed_by') then (select concat(f1.lastname ,' ',f1.firstname) from public.fssauser f1 where ms."ReviewedBy" = f1.id) end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('reviewed_by') then (select concat(f1.lastname ,' ',f1.firstname) from public.fssauser f1 where ms."ReviewedBy" = f1.id) end) desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('totalCount',total,'data',coalesce(result,'[]'))),'[]');
+
+
+
+ END;
+
+ $function$
+

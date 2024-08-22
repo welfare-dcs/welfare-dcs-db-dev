@@ -1,0 +1,37 @@
+CREATE OR REPLACE FUNCTION public.deletemock(_applicationgenid integer, _applicationsequence integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare intakecode character varying;
+
+begin
+
+
+
+delete from dbo."MonitoringSequence" ms where ms."ApplicantGenId" = _applicationgenid and ms."ApplicationSequence" = _applicationsequence;
+
+delete from dbo."Application" a where a."ApplicantGenId" = _applicationgenid and a."ApplicationSequence" = _applicationsequence;
+
+delete from dbo."Applicant" a where a."ApplicantGenId" = _applicationgenid;
+
+delete from dbo."Family" f where f."ApplicantGenId" = _applicationgenid and f."ApplicationSequence" = _applicationsequence;
+
+delete from dbo."Address" a where a."ApplicantGenId" = _applicationgenid and a."ApplicationSequence" = _applicationsequence;
+
+delete from public.temp_casedetails where casenumber::int = _applicationgenid and caseseqnumber = _applicationsequence;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

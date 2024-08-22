@@ -1,0 +1,41 @@
+CREATE OR REPLACE FUNCTION public.ais_case_realtion_insert(_originalcasegenid integer, _originalcaseapplicationsequence integer, _relatedcasegenid integer, _relatedcaseapplicationsequence integer)
+ RETURNS character varying
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+declare totalcount int4:=0;
+
+
+
+begin
+
+
+
+   select count(*) from public.ais_case_relation acr where acr.originalcasegenid = _originalcasegenid and acr.originalcaseapplicationsequence = _originalcaseapplicationsequence and acr.relatedcasegenid = _relatedcasegenid and acr.relatedcaseapplicationsequence = _relatedcaseapplicationsequence into totalcount;
+
+
+
+if totalcount = 0 then
+
+
+
+INSERT INTO public.ais_case_relation
+
+(originalcasegenid, originalcaseapplicationsequence, relatedcasegenid, relatedcaseapplicationsequence, createddate)
+
+VALUES(_originalcasegenid, _originalcaseapplicationsequence, _relatedcasegenid, _relatedcaseapplicationsequence, CURRENT_TIMESTAMP);
+
+
+
+end if;
+
+
+
+return 'success';
+
+ END
+
+ $function$
+

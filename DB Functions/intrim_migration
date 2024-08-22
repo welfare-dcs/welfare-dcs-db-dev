@@ -1,0 +1,111 @@
+CREATE OR REPLACE FUNCTION public.intrim_migration(_casenumber integer, _sequencenumber integer, _oldindividualid integer, _newindividualid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+ DECLARE row RECORD;
+
+begin
+
+
+
+   -- Pre Request : Make Sure the Data is pulled for TCC
+
+   
+
+   -- Step 1 : Update the Old Individual ID to Removed
+
+   update dbo."Family" set "IndividualStatusDescription" ='Removed' where "IndividualGenId" = _oldindividualid and "ApplicantGenId" = _casenumber and "ApplicationSequence" = _sequencenumber;
+
+
+
+   
+
+   -- Step 2 : Update the Old Individual ID to New Individidual ID in dbo.Document_DocumentType table
+
+   FOR row in select ddt."DocumentDocumentTypeGenId",ddt."DocumentGenId" ,ddt."IndividualGenId"  from userdocument u 
+
+            inner join scannedimage s on u.documentid =s.id 
+
+            inner join dbo."DocumentPage" dp on dp."DocumentPageGenId"  = s.documentpagegenid 
+
+            inner join dbo."Document_DocumentType" ddt on dp."DocumentGenId"  = ddt."DocumentGenId" 
+
+            where u.individualgenid = _oldindividualid and u.applicantgenid  = _casenumber and u.applicationsequence  = _sequencenumber loop
+
+      
+
+            update dbo."Document_DocumentType" set "IndividualGenId" = _newindividualid where "IndividualGenId" = _oldindividualid and "DocumentDocumentTypeGenId" = row."DocumentDocumentTypeGenId" and "DocumentGenId" = row."DocumentGenId";
+
+               
+
+   end loop;
+
+   
+
+   -- Step 3 : Update the Old Individual ID to New Individidual ID in User Documents table
+
+   update userdocument  set individualgenid = _oldindividualid where individualgenid = _newindividualid and "ApplicantGenId" = _casenumber and "ApplicationSequence" = _sequencenumber;
+
+
+
+
+
+   -- Step 4 : Move the Old Individual ID to Separate Table
+
+   FOR row in SELECT "ApplicantGenId", "ApplicationSequence", "PriorityGenId", "IndividualGenId", "ServiceNeedGenId", 
+
+   "ApplicantRelationshipGenId", "CustodialInd", "MedicaidInd", "WaitingListInd", "CreateDate", "CreatedBy", "UpdateDate", "UpdatedBy", 
+
+   "DeletedInd", "ApplicantInd", "WaitingListDate", "PayeeInd", "RemovalDate", "MoveToPartialDate", "SumRecordValue", "CreatedByUserName", 
+
+   "CreatedByFirstName", "CreatedByLastName", "UpdatedByUserName", "UpdatedByFirstName", "UpdatedByLastName", "RelationshipTypeDescription", "PriorityDescription", "IndividualStatusDescription", "ServiceNeedDescription", id, "HasJobSearch", "HasEducationProgram"
+
+   FROM dbo."Family" where u.individualgenid = _oldindividualid and u.applicantgenid  = _casenumber and u.applicationsequence  = _sequencenumber loop
+
+      
+
+      INSERT INTO backup."Family"("ApplicantGenId", "ApplicationSequence", "PriorityGenId", "IndividualGenId", "ServiceNeedGenId", 
+
+         "ApplicantRelationshipGenId", "CustodialInd", "MedicaidInd", "WaitingListInd", "CreateDate", "CreatedBy", "UpdateDate", "UpdatedBy", "DeletedInd", 
+
+         "ApplicantInd", "WaitingListDate", "PayeeInd", "RemovalDate", "MoveToPartialDate", "SumRecordValue", "CreatedByUserName", "CreatedByFirstName", 
+
+         "CreatedByLastName", "UpdatedByUserName", "UpdatedByFirstName", "UpdatedByLastName", "RelationshipTypeDescription", "PriorityDescription", 
+
+         "IndividualStatusDescription", "ServiceNeedDescription", "HasJobSearch", "HasEducationProgram")
+
+VALUES(row."ApplicantGenId", row."ApplicationSequence", row."PriorityGenId", row."IndividualGenId", row."ServiceNeedGenId", row."ApplicantRelationshipGenId", 
+
+row."CustodialInd", row."MedicaidInd", row."WaitingListInd", row."CreateDate", row."CreatedBy", row."UpdateDate", row."UpdatedBy", row."DeletedInd", 
+
+row."ApplicantInd", row."WaitingListDate", row."PayeeInd", row."RemovalDate", row."MoveToPartialDate", row."SumRecordValue", 
+
+row."CreatedByUserName", row."CreatedByFirstName", row."CreatedByLastName", row."UpdatedByUserName", row."UpdatedByFirstName", row."UpdatedByLastName", 
+
+row."RelationshipTypeDescription", row."PriorityDescription", row."IndividualStatusDescription", row."ServiceNeedDescription", row."HasJobSearch", 
+
+row."HasEducationProgram");
+
+
+
+               
+
+   end loop;
+
+
+
+
+
+   RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

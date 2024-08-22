@@ -1,0 +1,943 @@
+CREATE OR REPLACE FUNCTION public.cmd_getreviewlockjk(p_usergenid integer, p_monitoringitemgroupgenid integer, p_withidsind boolean)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+declare "v_ReviewHistoryGenId" integer;
+
+      "v_CurDate" timestamp;
+
+      rows_count integer;
+
+      "v_IsBCCQueue"   BOOLEAN;
+
+      row_count integer;
+
+      "v_IsTANFQueue" BOOLEAN;
+
+      "v_SelectedQueueID" integer;
+
+      result json;
+
+   
+
+begin
+
+   select rh."ReviewHistoryGenId" INTO "v_ReviewHistoryGenId"
+
+   FROM dbo."ReviewHistory" rh
+
+   WHERE 
+
+   rh."EndDate" IS null AND 
+
+   rh."UserGenId" = p_usergenid
+
+   order by rh."ReviewHistoryGenId" desc limit 1;
+
+   get diagnostics rows_count := ROW_COUNT;
+
+
+
+   if rows_count = 0
+
+   then
+
+      drop table if exists t_MonitoringSequence;
+
+      create table t_MonitoringSequence as
+
+      SELECT
+
+         ms."MonitoringSequenceGenId", 
+
+         ms."MonitoringPriorityGenId", 
+
+         ic."IntakeAgencyCode",
+
+         ms."ApplicantGenId", 
+
+         ms."ApplicationSequence", 
+
+         ms."MonitoringSequence",
+
+         ms."CreateDate", 
+
+         app."TerminationDate", 
+
+         app."SubsidyBeginDate", 
+
+         app."SubsidyEndDate",
+
+         app."ApplicationSignedDate",
+
+         CAST(1 AS BOOLEAN) "IsIDQueue",
+
+         CAST(1 AS BOOLEAN) "IsBCCQueue",
+
+         CAST(1 AS BOOLEAN) "IsTCCQueue",
+
+         CAST(1 AS BOOLEAN) "IsTANFQueue",
+
+         ms."TANFImpactReferral",
+
+         ms."TANFImpactReferralDate",
+
+         ms."AllowedToReviewDate",
+
+         rs."ScanStatusDescription", 
+
+         COALESCE(rs."ScanStatusGenId",0) "ScanStatusGenID",
+
+         f."PriorityGenId",
+
+         ms."NoID"
+
+      -- INTO t_MonitoringSequence
+
+      FROM
+
+         dbo."MonitoringSequence" ms  -- WITH(NOLOCK)
+
+      INNER JOIN dbo."Application" app ON ms."ApplicantGenId" = app."ApplicantGenId" AND ms."ApplicationSequence" = app."ApplicationSequence"
+
+      INNER JOIN dbo."Applicant" a ON ms."ApplicantGenId" = a."ApplicantGenId"
+
+        INNER JOIN dbo."Address" ad ON ad."ApplicantGenId" = a."ApplicantGenId" AND ad."ApplicationSequence" = app."ApplicationSequence"
+
+      INNER JOIN dbo."IntakeAgency_County" ic ON ic."CountyGenId" = ad."CountyGenId"
+
+      --8/27/2012 ChuckF
+
+      INNER JOIN    dbo."ref_ScanStatus" rs ON app."ScanStatusGenId" = rs."ScanStatusGenId"   AND COALESCE(app."ScanStatusGenId",0) IN (0,2,4,5)
+
+      LEFT JOIN dbo."Family" f ON (f."ApplicantGenId" = ms."ApplicantGenId" AND f."ApplicationSequence" = ms."ApplicationSequence"
+
+                                                              AND f."DeletedInd" = false AND f."ApplicantInd" = true)
+
+      WHERE    ms."MonitoringItemGroupGenId" = p_monitoringitemgroupgenid
+
+          AND ms."ApprovedInd" IS NULL
+
+          AND ms."DeleteDate" IS NULL
+
+          -- To fix bug where cases come to queue even before 21 days when AllowedToReviewDate is null.AllowedToReview date is set as
+
+         -- 21 days from scaneligibility date in Image mover but for some cases it is null may be because scan eligibilitydate is Null
+
+         AND ((COALESCE(ms."AllowedToReviewDate", INTERVAL '21 day' + app."ApplicationSignedDate") < cast((current_date || ' 11:59:59 pm') as timestamp)) 
+
+           OR (ms."MonitoringPriorityGenId" = 1) OR (ms."MonitoringPriorityGenId" = 7))
+
+         --4/30/2013 ChuckF per Cindy
+
+         AND app."ApplicationSignedDate" >= '09/01/2012'            
+
+         AND f."PriorityGenId" != 9 -- Cases with applicant priority SNAP should not show up in monitoring queue
+
+         AND COALESCE(app."IsLimitedEligibility", false ) = false; -- Limited Eligibility cases should not show up in monitoring queue
+
+      
+
+      --REMOVE EXPIRED CASES FROM QUEUE -- ADDED 7/24/14 -- AJ
+
+      DELETE FROM t_MonitoringSequence
+
+      WHERE ("SubsidyEndDate" < NOW() OR "TerminationDate" < NOW())
+
+      and "ScanStatusGenID" <> 5  -- SQLINES DEMO *** EEP CORRECTED CASES IN QUEUE -- AJ
+
+      and "ApplicationSignedDate" < '10/1/2018'; --All eligibility queues will retain expired and terminated cases if the application signed date is on or after October 1st, 2018
+
+
+
+      --GET GROUPS FOR THE SELECTED USER
+
+       
+
+       drop table if exists "t_Groups";
+
+      create table "t_Groups" as 
+
+      select u."BelongsToGroupGenId" "GroupGenId" from dbo."User_Group" u
+
+      where u."UserGenId" = p_usergenid;
+
+      get diagnostics row_count := ROW_COUNT;
+
+
+
+      WHILE row_count > 0 LOOP
+
+         INSERT INTO "t_Groups"
+
+         SELECT
+
+            g2."BelongsToGroupGenId" 
+
+         FROM
+
+            "t_Groups" g1
+
+         JOIN
+
+            dbo."User_Group" g2 ON
+
+               g1."GroupGenId" = g2."GroupGenId" 
+
+         LEFT JOIN
+
+            "t_Groups" g3 ON
+
+               g2."BelongsToGroupGenId" = g3."GroupGenId"
+
+         WHERE
+
+            g3."GroupGenId" IS NULL;
+
+      END LOOP;
+
+   
+
+      --SELECT THE ASSIGNED GROUP RIGHTS
+
+   
+
+      SELECT
+
+       MAX(CAST(g."BCCInd" AS integer))
+
+         , MAX(CAST(g."TANFInd" AS integer)) INTO "v_IsBCCQueue", "v_IsTANFQueue"
+
+      FROM
+
+         "t_Groups" ug
+
+      JOIN
+
+         dbo."Group" g ON
+
+            ug."GroupGenId" = g."GroupGenId";
+
+      
+
+   IF p_withidsind = false
+
+   then
+
+      --4/29/2013 ChuckF - Removing cases that have ALL ids scanned
+
+         DELETE
+
+--         FROM
+
+--            t_MonitoringSequence;
+
+         FROM
+
+            t_MonitoringSequence ms1
+
+         WHERE
+
+            NOT EXISTS (
+
+               SELECT
+
+                  i."IndividualGenId"
+
+               FROM
+
+                  dbo."Family" f
+
+               INNER JOIN
+
+                  dbo."Individual" i ON
+
+                     f."IndividualGenId" = i."IndividualGenId"
+
+                  AND
+
+                     COALESCE(i."ScannedIDInd" , false)
+
+               WHERE
+
+                  ms1."ApplicantGenId" = f."ApplicantGenId"
+
+               AND
+
+                  ms1."ApplicationSequence" = f."ApplicationSequence"
+
+               AND
+
+                  f."DeletedInd" = false 
+
+            );
+
+            
+
+         --AND PriorityGenID <> 1 --TANF Impact
+
+            
+
+         ----Remove Cases With Any Id's Scanned unless TANF Impact (we address those later below)
+
+         --DELETE
+
+         --FROM
+
+         --   #MonitoringSequence
+
+         --FROM
+
+         --   #MonitoringSequence ms1
+
+         --WHERE
+
+         --   -- At least one ID exists
+
+         --      EXISTS (
+
+         --      SELECT
+
+         --         i.IndividualGenId
+
+         --      FROM
+
+         --         Family f
+
+         --      INNER JOIN
+
+         --         Individual i ON
+
+         --            f.IndividualGenId = i.IndividualGenId
+
+         --         AND
+
+         --            ISNULL(i.ScannedIdInd, 0) = 1
+
+         --      WHERE
+
+         --         ms1.ApplicantGenId = f.ApplicantGenId
+
+         --      AND
+
+         --         ms1.ApplicationSequence = f.ApplicationSequence
+
+         --      AND
+
+         --         f.DeletedInd = 0
+
+         --   )      
+
+         --   AND PriorityGenID <> 1 --TANF Impact 
+
+            
+
+         --Remove Cases marked NO ID
+
+         
+
+         DELETE
+
+         FROM
+
+            t_MonitoringSequence ms
+
+         WHERE
+
+            ms."NoID" = true;
+
+         
+
+         --Remove TANF Cases where No ID exists
+
+         DELETE
+
+--            FROM
+
+--               t_MonitoringSequence
+
+         FROM
+
+            t_MonitoringSequence ms1
+
+         WHERE
+
+            "PriorityGenId" = 1 --TANF Impact 
+
+            AND
+
+            NOT EXISTS (
+
+               SELECT
+
+                  i."IndividualGenId"
+
+               FROM dbo."Family" f
+
+               INNER JOIN dbo."Individual" i ON f."IndividualGenId" = i."IndividualGenId" AND coalesce (i."ScannedIDInd", false ) = true
+
+               WHERE ms1."ApplicantGenId" = f."ApplicantGenId" AND ms1."ApplicationSequence" = f."ApplicationSequence"
+
+               AND   f."DeletedInd" = false );
+
+         --Remove TANF Cases where the AllowedToBeReviewedDate is NOT Greater than ApplicationSignedDate + 21
+
+         --4/15/2013 ChuckF - Removing 21-day rule
+
+         --DELETE
+
+         --FROM
+
+         --   #MonitoringSequence
+
+         --WHERE
+
+         --   PriorityGenID = 1 --TANF Impact 
+
+         --   AND AllowedToReviewDate < DATEADD(d, 21, ApplicationSignedDate)
+
+         
+
+         --Remove TANF Cases where the TANFImpactReferralDate IS NOT NULL
+
+         DELETE
+
+         FROM
+
+            t_MonitoringSequence
+
+         WHERE
+
+            "PriorityGenId" = 1 --TANF Impact 
+
+            AND "TANFImpactReferralDate" IS NOT null;
+
+
+
+         --Remove TANF Cases where the ApplicationSignedDate < '07/29/2012'
+
+         DELETE
+
+         FROM
+
+            t_MonitoringSequence
+
+         WHERE
+
+            "PriorityGenId" = 1 --TANF Impact  
+
+            AND "ApplicationSignedDate" < '07/29/2012';
+
+               
+
+         --Remove TANF Cases where the MonitoringSequence <> 1
+
+         DELETE
+
+         FROM
+
+            t_MonitoringSequence
+
+         WHERE
+
+            "PriorityGenId" = 1 --TANF Impact  
+
+            AND "MonitoringSequence" <> 1;
+
+            
+
+         --Remove Cases With Errors
+
+         DELETE
+
+         FROM
+
+            t_MonitoringSequence
+
+         WHERE
+
+            "MonitoringPriorityGenId" = 1;
+
+--      end if;
+
+      ELSE 
+
+         --NON ID-QUEUE
+
+         --Only review Current Cases unless it has an error
+
+         DELETE
+
+         FROM
+
+            t_MonitoringSequence ms
+
+         WHERE
+
+            (
+
+                  coalesce(ms."SubsidyBeginDate", '12/31/2222') > now()
+
+               --4/29/2013 ChuckF - Removing SubsideEndDate 30-day rule per Cindy
+
+--               OR
+
+--                  coalesce(ms."SubsidyEndDate", '01/01/1900')  < interval '-30 day' +NOW() -- GETDATE() hthakkar 7/22/2011 jira SCA-6883 
+
+               OR  
+
+                  coalesce(ms."SubsidyEndDate", '01/01/1900')  < '7/29/2011' --should consider terminated cases only after the release date hthakkar 7/22/2011 jira SCA-6883 
+
+
+
+            )
+
+         AND ms."MonitoringPriorityGenId" <> 1
+
+         AND ms."MonitoringPriorityGenId" <> 7;
+
+      
+
+         --Only review Cases Signed On or After 2/1
+
+         DELETE
+
+         FROM
+
+            t_MonitoringSequence
+
+         WHERE
+
+            "ApplicationSignedDate" < '02/01/2010'
+
+         AND
+
+            "MonitoringPriorityGenId" <> 1
+
+         AND "MonitoringPriorityGenId" <> 7;
+
+      
+
+         --4/29/2013 ChuckF - Removing cases with missing ids
+
+         DELETE
+
+         --FROM
+
+         --   #MonitoringSequence;
+
+         FROM t_MonitoringSequence ms1
+
+         --INNER JOIN dbo."Family" f ON ms1."ApplicantGenId" = f."ApplicantGenId" 
+
+         --   AND ms1."ApplicationSequence" = f."ApplicationSequence"
+
+         --   AND f."DeletedInd" = false 
+
+         --INNER JOIN dbo."Individual" i ON f."IndividualGenId" = i."IndividualGenId" 
+
+         --   AND COALESCE(i."ScannedIdInd", false ) = false 
+
+         WHERE "MonitoringPriorityGenId" <> 1
+
+            AND "MonitoringPriorityGenId" <> 7
+
+            AND ms1."NoID" = false;
+
+      
+
+      --Remove Cases With No Id's Scanned And No Existsing Errors
+
+--         DELETE
+
+----         FROM
+
+----            t_MonitoringSequence
+
+--         FROM
+
+--            t_MonitoringSequence ms1
+
+--         WHERE
+
+--            ms1."MonitoringPriorityGenId" <> 1
+
+--         AND ms1."MonitoringPriorityGenId" <> 7
+
+--         AND
+
+--            NOT EXISTS (
+
+--               SELECT
+
+--                  i."IndividualGenId"
+
+--               FROM
+
+--                  dbo."STAGEFamily" f
+
+--               INNER JOIN
+
+--                  dbo."STAGEIndividual" i ON
+
+--                     f."IndividualGenId" = i."IndividualGenId"
+
+--                  AND
+
+--                     COALESCE(i."ScannedIDInd" , false)
+
+--               WHERE
+
+--                  ms1."ApplicantGenId" = f."ApplicantGenId"
+
+--               AND
+
+--                  ms1."ApplicationSequence" = f."ApplicationSequence"
+
+--               AND
+
+--                  f."DeletedInd" = false
+
+--            );
+
+
+
+      --Remove TANF Cases where the ApplicationSignedDate < '07/29/2012'
+
+         DELETE
+
+         FROM
+
+            t_MonitoringSequence
+
+         WHERE
+
+            "PriorityGenId" = 1 --TANF Impact 
+
+            AND "ApplicationSignedDate" < '07/29/2012';
+
+                                    
+
+         --NEED LOGIC HERE TO ADD TANF IMPACT QUEUE BEFORE BCC/TCC QUEUES
+
+         --SINCE ID EXISTS, CHECK TANF IMPACT PRIORITY. IF NO TANF IMPACT PRIORITY, THEN FOLLOW BCC/TCC LOGIC BELOW
+
+
+
+         --TANF Impact IF f.PriorityGenID = 1
+
+         --         IF TANF Impact THEN check if TANF Impact Referral: ms.TANFImpactReferral = 1
+
+      IF "v_IsTANFQueue" = true
+
+          THEN --TANF QUEUE
+
+                "v_SelectedQueueID" := 3;
+
+                
+
+               DELETE
+
+               FROM
+
+                  t_MonitoringSequence
+
+               WHERE
+
+                  "PriorityGenID" != 1; -- Look for Tanf priority rather than TanfImpact referral.This would fix bug where TANF cases go to 
+
+                        -- BCC queue instead of TCC queue
+
+               --11/21/2012 ChuckF: Adding line below due to new business rules
+
+               DELETE
+
+               FROM
+
+                  t_MonitoringSequence
+
+               WHERE "NoID" = true;
+
+                                  
+
+          --END TANF QUEUE
+
+         ELSE
+
+          --BCC/TCC QUEUE         
+
+            IF "v_IsBCCQueue" = true
+
+              THEN --BCC QUEUE
+
+                 "v_SelectedQueueID" := 2;
+
+               --Remove Over 12 Weeks Subsidy If It Is The First Monitoring Sequence
+
+               DELETE
+
+               FROM
+
+                  t_MonitoringSequence
+
+               WHERE
+
+                  DATEDIFF(week, "SubsidyBeginDate", "SubsidyEndDate") > 12 
+
+               AND "MonitoringSequence" = 1;
+
+               
+
+               --REMOVE TANF IMPACT PRIORITY
+
+               DELETE
+
+               FROM
+
+                  t_MonitoringSequence
+
+               WHERE "TANFImpactReferral" = true
+
+               --11/21/2012 ChuckF: Adding line below due to new business rules
+
+               AND "NoID" = false ;
+
+                              
+
+              --END BCC QUEUE
+
+              ELSE 
+
+                --TCC QUEUE
+
+                 "v_SelectedQueueID" := 1;
+
+               --Remove 12 Weeks or Less Subsidy
+
+               DELETE
+
+               FROM
+
+                  t_MonitoringSequence
+
+               WHERE
+
+                  DATEDIFF(week, "SubsidyBeginDate", "SubsidyEndDate") <= 12;
+
+                  
+
+               --Remove Updates
+
+               DELETE
+
+               FROM
+
+                  t_MonitoringSequence
+
+               WHERE
+
+                  "MonitoringSequence" > 1;
+
+                  
+
+               --REMOVE TANF IMPACT PRIORITY
+
+               DELETE
+
+               FROM
+
+                  t_MonitoringSequence
+
+               WHERE "TANFImpactReferral" = true 
+
+               --11/21/2012 ChuckF: Adding line below due to new business rules
+
+               AND "NoID" = false;
+
+                              
+
+            END IF; --TCC QUEUE END
+
+         END IF; --BCC/TCC QUEUE END
+
+      END IF;--NON-ID QUEUE END
+
+      /*
+
+      SELECT
+
+         @CurDate   = GETDATE()
+
+      EXEC SCANDB.CCDFScanning.dbo.INUP_ReviewHistory
+
+         @ReviewHistoryGenId         = @ReviewHistoryGenId OUTPUT,
+
+         @BeginDate               = @CurDate,
+
+         @EndDate               = NULL,
+
+         @MonitoringSequenceGenId   = NULL,
+
+         @UserGenId               = @UserGenId
+
+      */
+
+      INSERT INTO dbo."ReviewHistory" ("BeginDate","UserGenId","MonitoringSequenceGenId") 
+
+      VALUES (NOW(),p_usergenid,null);
+
+
+
+       SELECT MAX(rh."ReviewHistoryGenId")
+
+                           FROM dbo."ReviewHistory" rh
+
+                           WHERE rh."UserGenId" = p_usergenid into "v_ReviewHistoryGenId";
+
+      
+
+      INSERT INTO dbo."ReviewLock" (
+
+         "ApplicantGenId", 
+
+         "ReviewHistoryGenId", 
+
+         "MonitoringSequenceGenId", 
+
+         "AquireDate"
+
+      ) 
+
+      SELECT
+
+         ms."ApplicantGenId", 
+
+         "v_ReviewHistoryGenId", 
+
+         ms."MonitoringSequenceGenId", 
+
+         NOW()
+
+      FROM 
+
+         t_MonitoringSequence ms
+
+      inner join dbo."IntakeAgency" ia on 
+
+         ms."IntakeAgencyCode" = ia."IntakeAgencyCode"  --ADDED 7/31/15 TO SORT BY HIGH PRIORITY IA'S
+
+      WHERE
+
+         ms."ApplicantGenId" NOT IN (SELECT rl."ApplicantGenId" FROM dbo."ReviewLock" rl for update)
+
+      ORDER BY
+
+         CASE 
+
+         WHEN "v_SelectedQueueID" = 0 THEN "ApplicationSignedDate" :: varchar
+
+         WHEN "v_SelectedQueueID" = 0 THEN "CreateDate" :: varchar
+
+         WHEN ("v_SelectedQueueID" IN (1,2,3)) AND "ScanStatusGenID" = 5 THEN 0 :: varchar--Corrections
+
+         WHEN ("v_SelectedQueueID" IN (1,2,3)) AND "NoID" = true THEN 0 :: varchar --No IDs
+
+         --4/29/2013 ChuckF - Removing TANF Impact from order per Cindy
+
+         --CASE WHEN @SelectedQueueID IN (1,2) AND PriorityGenID = 1  AND TANFImpactReferral = 0 THEN 0 ELSE 1 END, --No TANF Impact Referral
+
+         WHEN ("v_SelectedQueueID" IN (1,2,3)) THEN "ApplicationSignedDate" :: varchar
+
+         WHEN ("v_SelectedQueueID" IN (1,2,3)) THEN "CreateDate" :: varchar
+
+         else 1 :: varchar
+
+         end
+
+      limit 1;
+
+      
+
+      IF (SELECT rl."ApplicantGenId"
+
+         FROM dbo."ReviewLock" rl
+
+         WHERE rl."ReviewHistoryGenId" = "v_ReviewHistoryGenId") IS NULL THEN
+
+         select * from CMD_ReleaseAllReviewLocks(p_UserGenId);
+
+
+
+         "v_ReviewHistoryGenId" := NULL;
+
+       ELSE      
+
+         UPDATE dbo."ReviewHistory" rh
+
+         SET   "MonitoringSequenceGenId" = (SELECT rl."MonitoringSequenceGenId"
+
+                                 FROM   dbo."ReviewLock" rl
+
+                                 WHERE rl."ReviewHistoryGenId" = "v_ReviewHistoryGenId")
+
+         WHERE rh."ReviewHistoryGenId" = "v_ReviewHistoryGenId";            
+
+
+
+--         INSERT into dbo."ReviewHistory_ApplicantBatch" ("ReviewHistorygenId", "ApplicantBatchGenId") 
+
+--         SELECT "v_ReviewHistoryGenId", "ApplicantBatchGenId"
+
+--         FROM dbo."ReviewLock" rl 
+
+--         INNER JOIN   t_MonitoringSequence ms ON rl."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId"
+
+--         INNER join dbo."ApplicantBatch" ab ON ms."ApplicantGenId" = ab."ApplicantGenId"
+
+--                        AND (CASE WHEN p_WithIdsInd = true THEN ms."ApplicationSequence" ELSE ab."ApplicationSequence" END) = ab."ApplicationSequence"
+
+--         WHERE rl."ReviewHistoryGenId" = "v_ReviewHistoryGenId";
+
+      END IF;   
+
+   end if;
+
+   
+
+   IF "v_ReviewHistoryGenId" IS NOT NULL then
+
+      select Json_agg(row_to_json(t1)) from (SELECT
+
+         "v_ReviewHistoryGenId",
+
+         rh."MonitoringSequenceGenId",
+
+         a."AppealDate" "AppealDate", 
+
+         a."AppealAcceptDate" "AppealAcceptDate",
+
+         a."AppealDenyDate" "AppealDenyDate", 
+
+         ms."ApprovedInd",
+
+         ms."ApplicantGenId",
+
+         ms."ApplicationSequence"
+
+      from dbo."ReviewHistory" rh
+
+      LEFT OUTER JOIN dbo."Appeals" a ON rh."MonitoringSequenceGenId" = a."MonitoringSequenceGenId"
+
+      LEFT JOIN dbo."MonitoringSequence" ms ON rh."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId"
+
+      WHERE rh."ReviewHistoryGenId" = "v_ReviewHistoryGenId")t1 into result;
+
+   END IF;
+
+   RETURN COALESCE(result,'[]');
+
+end;
+
+$function$
+

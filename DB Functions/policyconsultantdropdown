@@ -1,0 +1,31 @@
+CREATE OR REPLACE FUNCTION public.policyconsultantdropdown()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select f.id as "id", concat(f.firstname,concat(' ', f.lastname)) as "label" from public.fssauser f where f.roleid = 'c26ea8c3-fae5-4df2-8044-fd062889c2da'
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

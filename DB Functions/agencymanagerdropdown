@@ -1,0 +1,33 @@
+CREATE OR REPLACE FUNCTION public.agencymanagerdropdown()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select f.id as "id", concat(f.firstname,concat(' ', f.lastname)) as "label" from public.fssauser f where f.roleid = 'eff5ef00-5d02-44fd-9256-093e0885b08c'
+
+--= 'ef0a0b2b-1bda-4375-a9e8-52aacf65f1d9'
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

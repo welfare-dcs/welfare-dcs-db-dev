@@ -1,0 +1,39 @@
+CREATE OR REPLACE FUNCTION public.rd_is_review_locked(p_applicantgenid integer DEFAULT NULL::integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+   
+
+select Json_agg(row_to_json(t1)) from (SELECT rh."UserGenId",
+
+coalesce(fsu.firstname,'QASE') as firstname,
+
+coalesce(fsu.lastname,'System') as lastname
+
+FROM dbo."ReviewHistory" rh
+
+join dbo."ReviewLock" rl on rh."ReviewHistoryGenId" = rl."ReviewHistoryGenId"
+
+left join fssauser fsu on rh."UserGenId" = fsu.id
+
+WHERE rl."ApplicantGenId" = p_applicantGenId)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+END;
+
+$function$
+

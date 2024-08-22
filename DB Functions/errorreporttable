@@ -1,0 +1,1497 @@
+CREATE OR REPLACE FUNCTION public.errorreporttable(_offset integer, _limit integer, _reason character varying, _intakeagency character varying, _county character varying, _startdate character varying, _enddate character varying, _sortcolumn character varying, _sortorder character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total int4;
+
+declare offsetValue int4 = 10;
+
+
+
+begin
+
+
+
+    offsetValue = offsetValue * _offset;
+
+
+
+if _offset = 0 then
+
+
+
+select
+
+count(t)
+
+from
+
+(
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error
+
+)t
+
+into total;
+
+
+
+else
+
+
+
+total = 0;
+
+
+
+end if;
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+if lower(_sortcolumn) = 'casenumber' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error,a2."ApplicantGenId",a2."ApplicationSequence"
+
+order by a2."ApplicantGenId" asc, a2."ApplicationSequence" asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='applicantname' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error
+
+order by applicantname asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='eligibilityoffice' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error
+
+order by eligibilityoffice asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='county' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error
+
+order by county asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='errordate' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error
+
+order by errordate asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='removebypolicy' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error
+
+order by removebypolicy asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='cannotbecorrected' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error
+
+order by cannotbecorrected asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='error' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error
+
+order by error asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+end if;
+
+
+
+if lower(_sortorder) = 'desc' then
+
+
+
+if lower(_sortcolumn) = 'casenumber' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error,a2."ApplicantGenId",a2."ApplicationSequence"
+
+order by a2."ApplicantGenId" desc, a2."ApplicationSequence" desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='applicantname' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error
+
+order by applicantname desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='eligibilityoffice' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error
+
+order by eligibilityoffice desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='county' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error
+
+order by county desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='errordate' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error
+
+order by errordate desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='removebypolicy' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error
+
+order by removebypolicy desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='cannotbecorrected' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error
+
+order by cannotbecorrected desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='error' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+-- , rc."CountyName" as "county"
+
+, e."CreateDate" as "errordate"
+
+, e."RemovedByPolicy" as "removebypolicy"
+
+, e."CannotBeCorrected" as "cannotbecorrected"
+
+, concat(et.errornumber,'.',et.sort,' ', et."Error") as "error"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+and case
+
+when lower(_reason) = '{approvedind}' then e."ApprovedInd" is true
+
+when lower(_reason) = '{cannotbecorrected}' then e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{removebypolicy}' then e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{approvedind,cannotbecorrected}' then e."ApprovedInd" is true or e."CannotBeCorrected" is not null
+
+when lower(_reason) = '{approvedind,removebypolicy}' then e."ApprovedInd" is true or e."RemovedByPolicy" is not null
+
+when lower(_reason) = '{cannotbecorrected,removebypolicy}' then e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+-- else e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+else e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null
+
+end
+
+group by casenumber,applicantname,eligibilityoffice,errordate,removebypolicy,cannotbecorrected,error
+
+order by error desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+end if;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('totalCount',total,'data',coalesce(result,'[]'))),'[]');
+
+
+
+ END;
+
+ $function$
+

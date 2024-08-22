@@ -1,0 +1,53 @@
+CREATE OR REPLACE FUNCTION public.eecreply(_casenumber integer, _sequencenumber integer, _oldindividualnumber integer, _newindividualnumber integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+DECLARE row RECORD;
+
+begin
+
+
+
+-- Step 1 : Update Old Individual ID to Removed.   
+
+FOR row in select * from dbo."Family" f 
+
+where f."ApplicantGenId" = _casenumber 
+
+and f."ApplicationSequence" = _sequencenumber 
+
+and f."IndividualGenId" = _oldindividualnumber 
+
+and "IndividualStatusDescription" != 'Removed' 
+
+loop
+
+
+
+   update dbo."Family" set "IndividualStatusDescription" = 'Removed' 
+
+   where f."ApplicantGenId" = _casenumber 
+
+   and f."ApplicationSequence" = _sequencenumber 
+
+   and f."IndividualGenId" = _oldindividualnumber;
+
+   
+
+END LOOP;
+
+
+
+RETURN coalesce(result,'[]');
+
+
+
+END;
+
+ $function$
+

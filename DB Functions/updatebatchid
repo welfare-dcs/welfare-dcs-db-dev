@@ -1,0 +1,35 @@
+CREATE OR REPLACE FUNCTION public.updatebatchid()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+DECLARE row RECORD;
+
+begin
+
+   
+
+   FOR row in select s.id,s.batchno,ab."ApplicantBatchGenId" from dbo."ApplicantBatch" ab inner join dbo."Document" d on ab."ApplicantBatchGenId"  = d."ApplicantBatchGenId" inner join dbo."DocumentPage" dp on dp."DocumentGenId" = d."DocumentGenId" inner join scannedimage s  on s.documentpagegenid  = dp."DocumentPageGenId" where s.batchno  != ab."ApplicantBatchGenId" group by s.id,s.batchno,ab."ApplicantBatchGenId" limit 10000 loop
+
+
+
+        update scannedimage set batchno = row."ApplicantBatchGenId" where id =row.id  and batchno= row.batchno;
+
+   
+
+    END LOOP;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

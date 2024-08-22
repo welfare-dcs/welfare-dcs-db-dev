@@ -1,0 +1,53 @@
+CREATE OR REPLACE FUNCTION public.eligibilityerrordropdown()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+et."ErrorTypeGenId" as "id"
+
+, concat(et.errornumber,concat('.',concat(et.sort,concat(' ', et."Error")))) as "lable"
+
+, mi."OrderNum" as "errornumber" 
+
+, rec."ErrorCategoryDescription" as "errortype"
+
+, rec."ErrorCategoryGenId" as "errorcategorygenid"
+
+from public."ErrorType" et 
+
+inner join dbo."ref_ErrorCategory" rec on et."errorCategoryGenId" = rec."ErrorCategoryGenId" 
+
+join dbo."MonitoringItem" mi on mi."MonitoringItemGenId" = et."MonitoringItemGenId" 
+
+where et.status is true
+
+and et."DeleteDate" is null
+
+order by et.errornumber , sort asc
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

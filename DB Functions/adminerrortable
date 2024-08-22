@@ -1,0 +1,1877 @@
+CREATE OR REPLACE FUNCTION public.adminerrortable(_offset integer, _limit integer, _casenumber character varying, _eligibilityoffice character varying, _startdate character varying, _enddate character varying, _sortcolumn character varying, _sortorder character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total int4;
+
+declare offsetValue int4 = 10;
+
+
+
+begin
+
+   set timezone = 'America/Indiana/Indianapolis';
+
+
+
+    offsetValue = offsetValue * _offset;
+
+
+
+if _offset = 0 then
+
+
+
+select
+
+count(t)
+
+from
+
+(
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+)t
+
+into total;
+
+
+
+else
+
+
+
+total = 0;
+
+
+
+end if;
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+if lower(_sortcolumn) = 'casenumber' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes,a."ApplicantGenId",a2."ApplicationSequence"
+
+order by a."ApplicantGenId" asc, a2."ApplicationSequence" asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'applicantname' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by applicantname asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'countyname' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by countyname asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'eligibilityoffice' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by eligibilityoffice asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'errortype' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by errortype asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'signaturedate' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by signaturedate asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'reviewdate' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by reviewdate asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'eligiblityspecialist' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by eligiblityspecialist asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'daysuncorrected' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by daysuncorrected asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'monitorerrornotes' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by monitorerrornotes asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+end if;
+
+
+
+if lower(_sortorder) = 'desc' then
+
+
+
+if lower(_sortcolumn) = 'casenumber' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes,a."ApplicantGenId",a2."ApplicationSequence"
+
+order by a."ApplicantGenId" desc, a2."ApplicationSequence" desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'applicantname' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by applicantname desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'countyname' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by countyname desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'eligibilityoffice' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by eligibilityoffice desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'errortype' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by errortype desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'signaturedate' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by signaturedate desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'reviewdate' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by reviewdate desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'eligiblityspecialist' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by eligiblityspecialist desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'daysuncorrected' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by daysuncorrected desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'monitorerrornotes' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName")
+
+, concat(' ',initcap(a."ApplicantLastName")))  as "applicantname"
+
+, rc."CountyName" as "countyname"
+
+, teo.description as "eligibilityoffice"
+
+, et."Error" as "errortype"
+
+, a2."ApplicationSignedDate" as "signaturedate"
+
+, ms."ReviewedDate" as "reviewdate"
+
+, f.username as "eligiblityspecialist"
+
+, DATE_PART('day',CURRENT_DATE::timestamp - ms."ReviewedDate"::timestamp)::integer as "daysuncorrected"
+
+, e."Comment" as "monitorerrornotes"
+
+from
+
+dbo."Applicant" a
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where rec."ErrorCategoryDescription" is not null
+
+and rec."IsAdminInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+-- and ms."ReviewedDate" is not null
+
+and e."ErrorGenId" is not null
+
+and e."ErrorCategoryGenId" = 1
+
+and a2."IsLimitedEligibility" is not true
+
+and case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by casenumber,applicantname,countyname,eligibilityoffice,errortype,signaturedate,reviewdate,eligiblityspecialist,daysuncorrected,monitorerrornotes
+
+order by monitorerrornotes desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+end if;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('totalCount',total,'data',coalesce(result,'[]'))),'[]');
+
+
+
+ END;
+
+ $function$
+

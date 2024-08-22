@@ -1,0 +1,1225 @@
+CREATE OR REPLACE FUNCTION public.appealsreporttable(_offset integer, _limit integer, _intakeagency character varying, _county character varying, _startdate character varying, _enddate character varying, _sortcolumn character varying, _sortorder character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total int4;
+
+declare offsetValue int4 = 10;
+
+
+
+begin
+
+
+
+    offsetValue = offsetValue * _offset;
+
+
+
+if _offset = 0 then
+
+
+
+select
+
+count(t)
+
+from
+
+(
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed
+
+)t
+
+into total;
+
+
+
+else
+
+
+
+total = 0;
+
+
+
+end if;
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+if lower(_sortcolumn) = 'casenumber' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed, a2."ApplicantGenId", a2."ApplicationSequence"
+
+order by a2."ApplicantGenId" asc, a2."ApplicationSequence" asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='applicantname' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed
+
+order by applicantname asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='eligibilityoffice' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed
+
+order by eligibilityoffice asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='county' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed
+
+order by county asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='appealacceptdate' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed
+
+order by appealacceptdate asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='appealdenydate' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed
+
+order by appealdenydate asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='appealdate' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed
+
+order by appealdate asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='elapsed' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed
+
+order by elapsed asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+end if;
+
+
+
+if lower(_sortorder) = 'desc' then
+
+
+
+if lower(_sortcolumn) = 'casenumber' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed, a2."ApplicantGenId", a2."ApplicationSequence"
+
+order by a2."ApplicantGenId" desc, a2."ApplicationSequence" desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='applicantname' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed
+
+order by applicantname desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='eligibilityoffice' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed
+
+order by eligibilityoffice desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='county' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed
+
+order by county desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='appealacceptdate' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed
+
+order by appealacceptdate desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='appealdenydate' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed
+
+order by appealdenydate desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='appealdate' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed
+
+order by appealdate desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='elapsed' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber"
+
+, concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName")) as "applicantname"
+
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, a3."AppealDate" as "appealdate"
+
+, case
+
+when a3."AppealAcceptDate" is not null then coalesce(a3."AppealAcceptDate"::date - a3."AppealDate"::date,0)
+
+when a3."AppealDenyDate" is not null then  coalesce(a3."AppealDenyDate"::date - a3."AppealDate"::date,0)
+
+end as "elapsed"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId"  = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on ms."MonitoringSequenceGenId"  = a3."MonitoringSequenceGenId"
+
+where
+
+case when _startdate = '' and _enddate = '' then true else a3."AppealDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and a2."IsLimitedEligibility" is not true
+
+group by casenumber,applicantname,eligibilityoffice,county,appealacceptdate,appealdenydate,appealdate,elapsed
+
+order by elapsed desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+end if;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('totalCount',total,'data',coalesce(result,'[]'))),'[]');
+
+
+
+ END;
+
+ $function$
+

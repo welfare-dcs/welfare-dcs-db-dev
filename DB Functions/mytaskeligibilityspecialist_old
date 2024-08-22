@@ -1,0 +1,1141 @@
+CREATE OR REPLACE FUNCTION public.mytaskeligibilityspecialist_old(_offset integer, _limit integer, _intakeagency character varying, _county character varying, _role character varying, _taskfilter character varying, _sortcolumn character varying, _sortorder character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total int4;
+
+declare offsetValue int4 = 10;
+
+
+
+begin
+
+
+
+    offsetValue = offsetValue * _offset;
+
+
+
+if _offset = 0 then
+
+
+
+select
+
+count(t)
+
+from
+
+(
+
+select
+
+concat(ms."ApplicantGenId",concat('-',ms."ApplicationSequence")) as "casenumber"
+
+, ms."MonitoringSequenceGenId"  as "monitorsequencegenid"
+
+, rp."PriorityDescription" as "type"
+
+, 'EO QA Review' as "task"
+
+, '05/20/2020' as "earliestduedate"
+
+, a."StateCode"
+
+,a.assetovermilliondollar
+
+--, case
+
+--when ms."ApplicationSequence" = 1 then
+
+-- ms."CreateDate"::date + interval '5 day'
+
+--when ms."ApplicationSequence" != 1 and e."ErrorCategoryGenId" = 2 then
+
+-- e."CreateDate"::date + interval '5 day'
+
+--end as "duedate"
+
+from dbo."MonitoringSequence" ms
+
+left join dbo."Applicant" a on ms."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."Application" a2 on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."ref_Priority" rp on ms."MonitoringPriorityGenId" = rp."PriorityGenId"
+
+--left join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+left join dbo."ref_County" rc on a."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+where
+
+case
+
+when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+when a2."ScanStatusGenId" = 1 and a2."ApplicationSignedDate" is not null then true
+
+when a2."ScanStatusGenId" = 2 then true
+
+when a2."ScanStatusGenId" = 4 and
+
+(select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is not true and e."CannotBeCorrected" is null and e."FixDate" is null and e.errorstatus is true and e."RemovedByPolicy" is null and e."CreateDate" > current_date  - ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval) > 0 then true
+
+when a2."ScanStatusGenId" = 4 then true
+
+end
+
+--case
+
+--when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+--when a2."ScanStatusGenId" in (1,2,4) then true
+
+--end
+
+and a2."TerminationDate" is null
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+)t
+
+into total;
+
+
+
+else
+
+
+
+total = 0;
+
+
+
+end if;
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+if lower(_sortcolumn) = 'casenumber' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(ms."ApplicantGenId",concat('-',ms."ApplicationSequence")) as "casenumber"
+
+, ms."MonitoringSequenceGenId"  as "monitorsequencegenid"
+
+, rp."PriorityDescription" as "type"
+
+, 'EO QA Review' as "task"
+
+--, '05/20/2020' as "earliestduedate"
+
+, a."StateCode"
+
+,a.assetovermilliondollar
+
+,a2."ScanStatusGenId"
+
+, case
+
+when a2."ScanStatusGenId" = 1 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 1) || ' days')::interval
+
+when a2."ScanStatusGenId" = 2 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 14) || ' days')::interval
+
+when a2."ScanStatusGenId" = 4 then
+
+(select e."CreateDate"::date from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2  limit 1)
+
++ ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval
+
+else '05/20/2020'
+
+end  as "earliestduedate"
+
+from dbo."MonitoringSequence" ms
+
+left join dbo."Applicant" a on ms."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."Application" a2 on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."ref_Priority" rp on ms."MonitoringPriorityGenId" = rp."PriorityGenId"
+
+--left join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+left join dbo."ref_County" rc on a."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+where
+
+case
+
+when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+when a2."ScanStatusGenId" = 1 and a2."ApplicationSignedDate" is not null then true
+
+when a2."ScanStatusGenId" = 2 then true
+
+when a2."ScanStatusGenId" = 4 and
+
+(select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is not true and e."CannotBeCorrected" is null and e."FixDate" is null and e.errorstatus is true and e."RemovedByPolicy" is null and e."CreateDate" > current_date  - ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval) > 0 then true
+
+when a2."ScanStatusGenId" = 4 then true
+
+end
+
+--case
+
+--when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+--when a2."ScanStatusGenId" in (1,2,4) then true
+
+--end
+
+and a2."TerminationDate" is null
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by ms."ApplicantGenId" asc, ms."ApplicationSequence" asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='monitorsequencegenid' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(ms."ApplicantGenId",concat('-',ms."ApplicationSequence")) as "casenumber"
+
+, ms."MonitoringSequenceGenId"  as "monitorsequencegenid"
+
+, rp."PriorityDescription" as "type"
+
+, 'EO QA Review' as "task"
+
+--, '05/20/2020' as "earliestduedate"
+
+, a."StateCode"
+
+,a.assetovermilliondollar
+
+,a2."ScanStatusGenId"
+
+, case
+
+when a2."ScanStatusGenId" = 1 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 1) || ' days')::interval
+
+when a2."ScanStatusGenId" = 2 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 14) || ' days')::interval
+
+when a2."ScanStatusGenId" = 4 then
+
+(select e."CreateDate"::date from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2  limit 1)
+
++ ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval
+
+else '05/20/2020'
+
+end  as "earliestduedate"
+
+from dbo."MonitoringSequence" ms
+
+left join dbo."Applicant" a on ms."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."Application" a2 on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."ref_Priority" rp on ms."MonitoringPriorityGenId" = rp."PriorityGenId"
+
+--left join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+left join dbo."ref_County" rc on a."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+where
+
+case
+
+when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+when a2."ScanStatusGenId" = 1 and a2."ApplicationSignedDate" is not null then true
+
+when a2."ScanStatusGenId" = 2 then true
+
+when a2."ScanStatusGenId" = 4 and
+
+(select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is not true and e."CannotBeCorrected" is null and e."FixDate" is null and e.errorstatus is true and e."RemovedByPolicy" is null and e."CreateDate" > current_date  - ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval) > 0 then true
+
+when a2."ScanStatusGenId" = 4 then true
+
+end
+
+--case
+
+--when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+--when a2."ScanStatusGenId" in (1,2,4) then true
+
+--end
+
+and a2."TerminationDate" is null
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by monitorsequencegenid asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='type' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(ms."ApplicantGenId",concat('-',ms."ApplicationSequence")) as "casenumber"
+
+, ms."MonitoringSequenceGenId"  as "monitorsequencegenid"
+
+, rp."PriorityDescription" as "type"
+
+, 'EO QA Review' as "task"
+
+--, '05/20/2020' as "earliestduedate"
+
+, a."StateCode"
+
+,a.assetovermilliondollar
+
+,a2."ScanStatusGenId"
+
+, case
+
+when a2."ScanStatusGenId" = 1 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 1) || ' days')::interval
+
+when a2."ScanStatusGenId" = 2 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 14) || ' days')::interval
+
+when a2."ScanStatusGenId" = 4 then
+
+(select e."CreateDate"::date from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2  limit 1)
+
++ ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval
+
+else '05/20/2020'
+
+end  as "earliestduedate"
+
+from dbo."MonitoringSequence" ms
+
+left join dbo."Applicant" a on ms."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."Application" a2 on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."ref_Priority" rp on ms."MonitoringPriorityGenId" = rp."PriorityGenId"
+
+--left join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+left join dbo."ref_County" rc on a."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+where
+
+case
+
+when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+when a2."ScanStatusGenId" = 1 and a2."ApplicationSignedDate" is not null then true
+
+when a2."ScanStatusGenId" = 2 then true
+
+when a2."ScanStatusGenId" = 4 and
+
+(select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is not true and e."CannotBeCorrected" is null and e."FixDate" is null and e.errorstatus is true and e."RemovedByPolicy" is null and e."CreateDate" > current_date  - ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval) > 0 then true
+
+when a2."ScanStatusGenId" = 4 then true
+
+end
+
+--case
+
+--when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+--when a2."ScanStatusGenId" in (1,2,4) then true
+
+--end
+
+and a2."TerminationDate" is null
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by type asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='task' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(ms."ApplicantGenId",concat('-',ms."ApplicationSequence")) as "casenumber"
+
+, ms."MonitoringSequenceGenId"  as "monitorsequencegenid"
+
+, rp."PriorityDescription" as "type"
+
+, 'EO QA Review' as "task"
+
+--, '05/20/2020' as "earliestduedate"
+
+, a."StateCode"
+
+,a.assetovermilliondollar
+
+,a2."ScanStatusGenId"
+
+, case
+
+when a2."ScanStatusGenId" = 1 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 1) || ' days')::interval
+
+when a2."ScanStatusGenId" = 2 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 14) || ' days')::interval
+
+when a2."ScanStatusGenId" = 4 then
+
+(select e."CreateDate"::date from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2  limit 1)
+
++ ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval
+
+else '05/20/2020'
+
+end  as "earliestduedate"
+
+from dbo."MonitoringSequence" ms
+
+left join dbo."Applicant" a on ms."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."Application" a2 on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."ref_Priority" rp on ms."MonitoringPriorityGenId" = rp."PriorityGenId"
+
+--left join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+left join dbo."ref_County" rc on a."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+where
+
+case
+
+when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+when a2."ScanStatusGenId" = 1 and a2."ApplicationSignedDate" is not null then true
+
+when a2."ScanStatusGenId" = 2 then true
+
+when a2."ScanStatusGenId" = 4 and
+
+(select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is not true and e."CannotBeCorrected" is null and e."FixDate" is null and e.errorstatus is true and e."RemovedByPolicy" is null and e."CreateDate" > current_date  - ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval) > 0 then true
+
+when a2."ScanStatusGenId" = 4 then true
+
+end
+
+--case
+
+--when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+--when a2."ScanStatusGenId" in (1,2,4) then true
+
+--end
+
+and a2."TerminationDate" is null
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by task asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='earliestduedate' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(ms."ApplicantGenId",concat('-',ms."ApplicationSequence")) as "casenumber"
+
+, ms."MonitoringSequenceGenId"  as "monitorsequencegenid"
+
+, rp."PriorityDescription" as "type"
+
+, 'EO QA Review' as "task"
+
+--, '05/20/2020' as "earliestduedate"
+
+, a."StateCode"
+
+,a.assetovermilliondollar
+
+,a2."ScanStatusGenId"
+
+, case
+
+when a2."ScanStatusGenId" = 1 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 1) || ' days')::interval
+
+when a2."ScanStatusGenId" = 2 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 14) || ' days')::interval
+
+when a2."ScanStatusGenId" = 4 then
+
+(select e."CreateDate"::date from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2  limit 1)
+
++ ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval
+
+else '05/20/2020'
+
+end  as "earliestduedate"
+
+from dbo."MonitoringSequence" ms
+
+left join dbo."Applicant" a on ms."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."Application" a2 on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."ref_Priority" rp on ms."MonitoringPriorityGenId" = rp."PriorityGenId"
+
+--left join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+left join dbo."ref_County" rc on a."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+where
+
+case
+
+when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+when a2."ScanStatusGenId" = 1 and a2."ApplicationSignedDate" is not null then true
+
+when a2."ScanStatusGenId" = 2 then true
+
+when a2."ScanStatusGenId" = 4 and
+
+(select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is not true and e."CannotBeCorrected" is null and e."FixDate" is null and e.errorstatus is true and e."RemovedByPolicy" is null and e."CreateDate" > current_date  - ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval) > 0 then true
+
+when a2."ScanStatusGenId" = 4 then true
+
+end
+
+--case
+
+--when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+--when a2."ScanStatusGenId" in (1,2,4) then true
+
+--end
+
+and a2."TerminationDate" is null
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by earliestduedate asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+end if;
+
+
+
+if lower(_sortorder) = 'desc' then
+
+
+
+if lower(_sortcolumn) = 'casenumber' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(ms."ApplicantGenId",concat('-',ms."ApplicationSequence")) as "casenumber"
+
+, ms."MonitoringSequenceGenId"  as "monitorsequencegenid"
+
+, rp."PriorityDescription" as "type"
+
+, 'EO QA Review' as "task"
+
+--, '05/20/2020' as "earliestduedate"
+
+, a."StateCode"
+
+,a.assetovermilliondollar
+
+,a2."ScanStatusGenId"
+
+, case
+
+when a2."ScanStatusGenId" = 1 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 1) || ' days')::interval
+
+when a2."ScanStatusGenId" = 2 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 14) || ' days')::interval
+
+when a2."ScanStatusGenId" = 4 then
+
+(select e."CreateDate"::date from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2  limit 1)
+
++ ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval
+
+else '05/20/2020'
+
+end  as "earliestduedate"
+
+from dbo."MonitoringSequence" ms
+
+left join dbo."Applicant" a on ms."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."Application" a2 on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."ref_Priority" rp on ms."MonitoringPriorityGenId" = rp."PriorityGenId"
+
+--left join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+left join dbo."ref_County" rc on a."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+where
+
+case
+
+when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+when a2."ScanStatusGenId" = 1 and a2."ApplicationSignedDate" is not null then true
+
+when a2."ScanStatusGenId" = 2 then true
+
+when a2."ScanStatusGenId" = 4 and
+
+(select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is not true and e."CannotBeCorrected" is null and e."FixDate" is null and e.errorstatus is true and e."RemovedByPolicy" is null and e."CreateDate" > current_date  - ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval) > 0 then true
+
+when a2."ScanStatusGenId" = 4 then true
+
+end
+
+--case
+
+--when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+--when a2."ScanStatusGenId" in (1,2,4) then true
+
+--end
+
+and a2."TerminationDate" is null
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by ms."ApplicantGenId" desc, ms."ApplicationSequence" desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='monitorsequencegenid' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(ms."ApplicantGenId",concat('-',ms."ApplicationSequence")) as "casenumber"
+
+, ms."MonitoringSequenceGenId"  as "monitorsequencegenid"
+
+, rp."PriorityDescription" as "type"
+
+, 'EO QA Review' as "task"
+
+--, '05/20/2020' as "earliestduedate"
+
+, a."StateCode"
+
+,a.assetovermilliondollar
+
+,a2."ScanStatusGenId"
+
+, case
+
+when a2."ScanStatusGenId" = 1 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 1) || ' days')::interval
+
+when a2."ScanStatusGenId" = 2 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 14) || ' days')::interval
+
+when a2."ScanStatusGenId" = 4 then
+
+(select e."CreateDate"::date from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2  limit 1)
+
++ ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval
+
+else '05/20/2020'
+
+end  as "earliestduedate"
+
+from dbo."MonitoringSequence" ms
+
+left join dbo."Applicant" a on ms."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."Application" a2 on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."ref_Priority" rp on ms."MonitoringPriorityGenId" = rp."PriorityGenId"
+
+--left join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+left join dbo."ref_County" rc on a."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+where
+
+case
+
+when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+when a2."ScanStatusGenId" = 1 and a2."ApplicationSignedDate" is not null then true
+
+when a2."ScanStatusGenId" = 2 then true
+
+when a2."ScanStatusGenId" = 4 and
+
+(select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is not true and e."CannotBeCorrected" is null and e."FixDate" is null and e.errorstatus is true and e."RemovedByPolicy" is null and e."CreateDate" > current_date  - ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval) > 0 then true
+
+when a2."ScanStatusGenId" = 4 then true
+
+end
+
+--case
+
+--when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+--when a2."ScanStatusGenId" in (1,2,4) then true
+
+--end
+
+and a2."TerminationDate" is null
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by monitorsequencegenid desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='type' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(ms."ApplicantGenId",concat('-',ms."ApplicationSequence")) as "casenumber"
+
+, ms."MonitoringSequenceGenId"  as "monitorsequencegenid"
+
+, rp."PriorityDescription" as "type"
+
+, 'EO QA Review' as "task"
+
+--, '05/20/2020' as "earliestduedate"
+
+, a."StateCode"
+
+,a.assetovermilliondollar
+
+,a2."ScanStatusGenId"
+
+, case
+
+when a2."ScanStatusGenId" = 1 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 1) || ' days')::interval
+
+when a2."ScanStatusGenId" = 2 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 14) || ' days')::interval
+
+when a2."ScanStatusGenId" = 4 then
+
+(select e."CreateDate"::date from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2  limit 1)
+
++ ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval
+
+else '05/20/2020'
+
+end  as "earliestduedate"
+
+from dbo."MonitoringSequence" ms
+
+left join dbo."Applicant" a on ms."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."Application" a2 on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."ref_Priority" rp on ms."MonitoringPriorityGenId" = rp."PriorityGenId"
+
+--left join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+left join dbo."ref_County" rc on a."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+where
+
+case
+
+when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+when a2."ScanStatusGenId" = 1 and a2."ApplicationSignedDate" is not null then true
+
+when a2."ScanStatusGenId" = 2 then true
+
+when a2."ScanStatusGenId" = 4 and
+
+(select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is not true and e."CannotBeCorrected" is null and e."FixDate" is null and e.errorstatus is true and e."RemovedByPolicy" is null and e."CreateDate" > current_date  - ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval) > 0 then true
+
+when a2."ScanStatusGenId" = 4 then true
+
+end
+
+--case
+
+--when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+--when a2."ScanStatusGenId" in (1,2,4) then true
+
+--end
+
+and a2."TerminationDate" is null
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by type desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='task' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(ms."ApplicantGenId",concat('-',ms."ApplicationSequence")) as "casenumber"
+
+, ms."MonitoringSequenceGenId"  as "monitorsequencegenid"
+
+, rp."PriorityDescription" as "type"
+
+, 'EO QA Review' as "task"
+
+--, '05/20/2020' as "earliestduedate"
+
+, a."StateCode"
+
+,a.assetovermilliondollar
+
+,a2."ScanStatusGenId"
+
+, case
+
+when a2."ScanStatusGenId" = 1 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 1) || ' days')::interval
+
+when a2."ScanStatusGenId" = 2 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 14) || ' days')::interval
+
+when a2."ScanStatusGenId" = 4 then
+
+(select e."CreateDate"::date from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2  limit 1)
+
++ ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval
+
+else '05/20/2020'
+
+end  as "earliestduedate"
+
+from dbo."MonitoringSequence" ms
+
+left join dbo."Applicant" a on ms."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."Application" a2 on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."ref_Priority" rp on ms."MonitoringPriorityGenId" = rp."PriorityGenId"
+
+--left join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+left join dbo."ref_County" rc on a."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+where
+
+case
+
+when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+when a2."ScanStatusGenId" = 1 and a2."ApplicationSignedDate" is not null then true
+
+when a2."ScanStatusGenId" = 2 then true
+
+when a2."ScanStatusGenId" = 4 and
+
+(select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is not true and e."CannotBeCorrected" is null and e."FixDate" is null and e.errorstatus is true and e."RemovedByPolicy" is null and e."CreateDate" > current_date  - ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval) > 0 then true
+
+when a2."ScanStatusGenId" = 4 then true
+
+end
+
+--case
+
+--when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+--when a2."ScanStatusGenId" in (1,2,4) then true
+
+--end
+
+and a2."TerminationDate" is null
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by task desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) ='earliestduedate' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(ms."ApplicantGenId",concat('-',ms."ApplicationSequence")) as "casenumber"
+
+, ms."MonitoringSequenceGenId"  as "monitorsequencegenid"
+
+, rp."PriorityDescription" as "type"
+
+, 'EO QA Review' as "task"
+
+--, '05/20/2020' as "earliestduedate"
+
+, a."StateCode"
+
+,a.assetovermilliondollar
+
+,a2."ScanStatusGenId"
+
+, case
+
+when a2."ScanStatusGenId" = 1 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 1) || ' days')::interval
+
+when a2."ScanStatusGenId" = 2 then a2."ApplicationSignedDate"::date + ((select g."ruleValue"::int from public.globals g where g."globalId" = 14) || ' days')::interval
+
+when a2."ScanStatusGenId" = 4 then
+
+(select e."CreateDate"::date from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2  limit 1)
+
++ ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval
+
+else '05/20/2020'
+
+end  as "earliestduedate"
+
+from dbo."MonitoringSequence" ms
+
+left join dbo."Applicant" a on ms."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."Application" a2 on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."ref_Priority" rp on ms."MonitoringPriorityGenId" = rp."PriorityGenId"
+
+--left join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+left join dbo."ref_County" rc on a."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+where
+
+case
+
+when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+when a2."ScanStatusGenId" = 1 and a2."ApplicationSignedDate" is not null then true
+
+when a2."ScanStatusGenId" = 2 then true
+
+when a2."ScanStatusGenId" = 4 and
+
+(select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is not true and e."CannotBeCorrected" is null and e."FixDate" is null and e.errorstatus is true and e."RemovedByPolicy" is null and e."CreateDate" > current_date  - ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval) > 0 then true
+
+when a2."ScanStatusGenId" = 4 then true
+
+end
+
+--case
+
+--when a."StateCode" != 'IN' or a.assetovermilliondollar is true then true
+
+--when a2."ScanStatusGenId" in (1,2,4) then true
+
+--end
+
+and a2."TerminationDate" is null
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by earliestduedate desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+end if;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('totalCount',total,'data',coalesce(result,'[]'))),'[]');
+
+
+
+ END;
+
+ $function$
+

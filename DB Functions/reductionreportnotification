@@ -1,0 +1,321 @@
+CREATE OR REPLACE FUNCTION public.reductionreportnotification()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total int4;
+
+
+
+begin
+
+
+
+   select count(*) from
+
+(
+
+select
+
+--concat(ms."ApplicantGenId",concat('-',ms."ApplicationSequence")) as "casenumber"
+
+--, a."ApplicantFirstName" as "firstname"
+
+--, a."ApplicantLastName" as "lastname"
+
+--, teo.description as "region"
+
+--, rc."CountyName" as "county"
+
+--, e."CreateDate" as "errordate"
+
+--, e."FineDate" as "reductiondate"
+
+teo.case_rate as "caserate"
+
+, teo.agencymanageremail 
+
+, eligibilityofficename
+
+, teo.id
+
+-- , lh."SentDate" as "letterdate",
+
+/*
+
+, CASE
+
+WHEN a2."AppealAcceptDate" is not null THEN 'accepted'
+
+when a2."AppealDenyDate" is not null then 'denied'
+
+end as "appealdenied",
+
+CASE
+
+WHEN e."CannotBeCorrected" is not null THEN 'yes'
+
+else 'no'
+
+end as "cannotbecorrected"*/
+
+from dbo."MonitoringSequence" ms
+
+inner join dbo."Applicant" a on ms."ApplicantGenId"  = a."ApplicantGenId"
+
+join dbo."Application" a4 on ms."ApplicantGenId" = a4."ApplicantGenId" and ms."ApplicationSequence" = a4."ApplicationSequence"
+
+-- inner join dbo."LetterHistory" lh on ms."ApplicantGenId" = lh."ApplicantGenId" and ms."ApplicationSequence" = lh."ApplicationSequence"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ref_County" rc on a."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join dbo."Appeals" a2 on ms."MonitoringSequenceGenId" = a2."MonitoringSequenceGenId"
+
+where
+
+--case when _reporttype = '' then true else teo.id = any(_reporttype ::int[]) end and
+
+to_char(e."FineDate", 'dd-mm-yyyy') = to_char(current_date -1, 'dd-mm-yyyy')
+
+and case
+
+-- 1. A case that has an error marked as cannot be corrected (goes to GAR)
+
+when (select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."CannotBeCorrected" is not null) > 0 and a4."ApplicationSignedDate"::date < current_date - ((select g."ruleValue"::int from public.globals g where g."globalId" = 12) || ' days')::interval then true
+
+-- 2. A case where an appeal has been denied after 6 days (Days in which a case must be terminated by ES after appeal denial)
+
+when (select count(*) from dbo."Error" e inner join dbo."Appeals" a3  on ms."MonitoringSequenceGenId" = a3."MonitoringSequenceGenId"
+
+where e."MonitoringSequenceGenId" =  ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and
+
+a3."AppealDenyDate"::date < current_date - ((select g."ruleValue"::int from public.globals g where g."globalId" = 10) || ' days')::interval
+
+) > 0 then true
+
+-- 3. A case where an error has been corrected but was corrected after 23 days
+
+when (select count(*) from dbo."Error" e
+
+where e."MonitoringSequenceGenId" =  ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e.errorstatus is true and (e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null or e."FixDate" is not null)
+
+and e."CreateDate"::date < current_date - ((select g."ruleValue"::int from public.globals g where g."globalId" = 12) || ' days')::interval
+
+) > 0 then true
+
+-- 4. A case has been singed by provider but no documents were scanned within 13 (Days in which no documents were not scanned  to notify ES to terminate the case)
+
+when a4."ApplicationSignedDate"::date < current_date - ((select g."ruleValue"::int from public.globals g where g."globalId" = 2) || ' days')::interval then true
+
+-- 5. A case in which errors have not been corrected within 13 days (Days in which eligibility errors must be fixed )
+
+when (select count(*) from dbo."Error" e
+
+where e."MonitoringSequenceGenId" =  ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and
+
+e."ApprovedInd" is null and e."CannotBeCorrected" is null and  e."RemovedByPolicy" is null and e."FixDate" is null and e.errorstatus is true
+
+and e."CreateDate"::date < current_date - ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval
+
+) > 0 then true
+
+-- 6. A case in which correction was denied, no appeal was created, no termination(Days in which a correction denial may be appealed)
+
+when (select count(*) from dbo."Error" e inner join dbo."Appeals" a3  on ms."MonitoringSequenceGenId" = a3."MonitoringSequenceGenId"
+
+where e."MonitoringSequenceGenId" =  ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is false) > 0 then true
+
+-- 7. A case in which errors are outstanding (no fixed date) after 23 days (Days in which a case with critical errors appear on the Preview Payment Reduction report)
+
+when (select count(*) from dbo."Error" e
+
+where e."MonitoringSequenceGenId" =  ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and
+
+e."ApprovedInd" is null and e."CannotBeCorrected" is null and  e."RemovedByPolicy" is null and e."FixDate" is null and e.errorstatus is true
+
+and e."CreateDate"::date < current_date - ((select g."ruleValue"::int from public.globals g where g."globalId" = 12) || ' days')::interval
+
+) > 0 then true
+
+end
+
+group by teo.case_rate
+
+, teo.agencymanageremail 
+
+, teo.eligibilityofficename
+
+, teo.id
+
+--order by ms."ApplicantGenId" asc, ms."ApplicationSequence" asc
+
+)t
+
+into total;
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+--concat(ms."ApplicantGenId",concat('-',ms."ApplicationSequence")) as "casenumber"
+
+--, a."ApplicantFirstName" as "firstname"
+
+--, a."ApplicantLastName" as "lastname"
+
+--, teo.description as "region"
+
+--, rc."CountyName" as "county"
+
+--, e."CreateDate" as "errordate"
+
+--, e."FineDate" as "reductiondate"
+
+teo.case_rate as "caserate"
+
+, teo.agencymanageremail 
+
+,teo.eligibilityofficename
+
+, teo.id
+
+-- , lh."SentDate" as "letterdate",
+
+/*
+
+, CASE
+
+WHEN a2."AppealAcceptDate" is not null THEN 'accepted'
+
+when a2."AppealDenyDate" is not null then 'denied'
+
+end as "appealdenied",
+
+CASE
+
+WHEN e."CannotBeCorrected" is not null THEN 'yes'
+
+else 'no'
+
+end as "cannotbecorrected"*/
+
+from dbo."MonitoringSequence" ms
+
+inner join dbo."Applicant" a on ms."ApplicantGenId"  = a."ApplicantGenId"
+
+join dbo."Application" a4 on ms."ApplicantGenId" = a4."ApplicantGenId" and ms."ApplicationSequence" = a4."ApplicationSequence"
+
+-- inner join dbo."LetterHistory" lh on ms."ApplicantGenId" = lh."ApplicantGenId" and ms."ApplicationSequence" = lh."ApplicationSequence"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ref_County" rc on a."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join dbo."Appeals" a2 on ms."MonitoringSequenceGenId" = a2."MonitoringSequenceGenId"
+
+where
+
+--case when _reporttype = '' then true else teo.id = any(_reporttype ::int[]) end and
+
+to_char(e."FineDate", 'dd-mm-yyyy') = to_char(current_date -1, 'dd-mm-yyyy')
+
+and case
+
+-- 1. A case that has an error marked as cannot be corrected (goes to GAR)
+
+when (select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."CannotBeCorrected" is not null) > 0 and a4."ApplicationSignedDate"::date < current_date - ((select g."ruleValue"::int from public.globals g where g."globalId" = 12) || ' days')::interval then true
+
+-- 2. A case where an appeal has been denied after 6 days (Days in which a case must be terminated by ES after appeal denial)
+
+when (select count(*) from dbo."Error" e inner join dbo."Appeals" a3  on ms."MonitoringSequenceGenId" = a3."MonitoringSequenceGenId"
+
+where e."MonitoringSequenceGenId" =  ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and
+
+a3."AppealDenyDate"::date < current_date - ((select g."ruleValue"::int from public.globals g where g."globalId" = 10) || ' days')::interval
+
+) > 0 then true
+
+-- 3. A case where an error has been corrected but was corrected after 23 days
+
+when (select count(*) from dbo."Error" e
+
+where e."MonitoringSequenceGenId" =  ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e.errorstatus is true and (e."ApprovedInd" is true or e."CannotBeCorrected" is not null or e."RemovedByPolicy" is not null or e."FixDate" is not null)
+
+and e."CreateDate"::date < current_date - ((select g."ruleValue"::int from public.globals g where g."globalId" = 12) || ' days')::interval
+
+) > 0 then true
+
+-- 4. A case has been singed by provider but no documents were scanned within 13 (Days in which no documents were not scanned  to notify ES to terminate the case)
+
+when a4."ApplicationSignedDate"::date < current_date - ((select g."ruleValue"::int from public.globals g where g."globalId" = 2) || ' days')::interval then true
+
+-- 5. A case in which errors have not been corrected within 13 days (Days in which eligibility errors must be fixed )
+
+when (select count(*) from dbo."Error" e
+
+where e."MonitoringSequenceGenId" =  ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and
+
+e."ApprovedInd" is null and e."CannotBeCorrected" is null and  e."RemovedByPolicy" is null and e."FixDate" is null and e.errorstatus is true
+
+and e."CreateDate"::date < current_date - ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval
+
+) > 0 then true
+
+-- 6. A case in which correction was denied, no appeal was created, no termination(Days in which a correction denial may be appealed)
+
+when (select count(*) from dbo."Error" e inner join dbo."Appeals" a3  on ms."MonitoringSequenceGenId" = a3."MonitoringSequenceGenId"
+
+where e."MonitoringSequenceGenId" =  ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is false) > 0 then true
+
+-- 7. A case in which errors are outstanding (no fixed date) after 23 days (Days in which a case with critical errors appear on the Preview Payment Reduction report)
+
+when (select count(*) from dbo."Error" e
+
+where e."MonitoringSequenceGenId" =  ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and
+
+e."ApprovedInd" is null and e."CannotBeCorrected" is null and  e."RemovedByPolicy" is null and e."FixDate" is null and e.errorstatus is true
+
+and e."CreateDate"::date < current_date - ((select g."ruleValue"::int from public.globals g where g."globalId" = 12) || ' days')::interval
+
+) > 0 then true
+
+end
+
+group by teo.case_rate
+
+, teo.agencymanageremail 
+
+, teo.id
+
+,teo.eligibilityofficename
+
+--order by ms."ApplicantGenId" asc, ms."ApplicationSequence" asc
+
+)t1 into result;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('totalCount',total,'data',result)),'[]');
+
+
+
+ END;
+
+ $function$
+

@@ -1,0 +1,13 @@
+CREATE OR REPLACE FUNCTION public.mytask_mm_trigger()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+
+begin
+
+   refresh materialized view concurrently public.mytask_mm_materialized;
+
+    return null;
+
+end $function$
+

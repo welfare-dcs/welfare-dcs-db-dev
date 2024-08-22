@@ -1,0 +1,317 @@
+CREATE OR REPLACE FUNCTION public.ais_sync_related_case_images(_originalcasegenid integer, _originalcaseapplicationsequence integer, _relatedcasegenid integer, _relatedcaseapplicationsequence integer)
+ RETURNS character varying
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+declare parentDocId int4:=0;
+
+declare documentGenId int4:=0;
+
+declare documentTypeGenId int4:=0;
+
+declare documentBatchGenId int4:=0;
+
+declare applicantBatchGenId int4:=0;
+
+declare newDocumentGenId int4:=0;
+
+declare newApplicantBatchGenId int4:=0;
+
+declare temp2 character varying;
+
+
+
+begin
+
+
+
+DROP table IF EXISTS temp2;
+
+   
+
+CREATE TEMP TABLE IF NOT EXISTS temp2(
+
+"id" SERIAL PRIMARY KEY,
+
+"ParentCaseGenId" int4,
+
+"ChildCaseGenId" int4,
+
+"ApplicationSequence" int4,
+
+"DocumentGenId" int4,
+
+"CreatedDate" timestamp,
+
+"CreatedBy" int4,
+
+"DocumentTypeGenId" int4,
+
+"IndividualGenId" int4,
+
+"IncomeGenId" int4,
+
+"ApplicantBatchGenId" int4,
+
+"DocumentBatchGenId" int4,
+
+"NewDocumentGenId" int4,
+
+"NewApplicantBatchGenId" int4,
+
+"Processed" int4
+
+);
+
+
+
+insert into temp2("ParentCaseGenId",
+
+"ChildCaseGenId",
+
+"ApplicationSequence",
+
+"DocumentGenId",
+
+"CreatedDate",
+
+"CreatedBy",
+
+"DocumentTypeGenId",
+
+"IndividualGenId",
+
+"IncomeGenId",
+
+"ApplicantBatchGenId",
+
+"DocumentBatchGenId",
+
+"NewDocumentGenId",
+
+"NewApplicantBatchGenId",
+
+"Processed")
+
+select distinct 
+
+_originalcasegenid 
+
+, _relatedcasegenid 
+
+, _relatedcaseapplicationsequence
+
+, d."DocumentGenId" 
+
+, d."CreatedDate" 
+
+, d."CreatedBy" 
+
+, ddt."DocumentTypeGenId" 
+
+, ddt."IndividualGenId" 
+
+, ddt."IncomeGenId" 
+
+, ab."ApplicantBatchGenId" 
+
+, ab."DocumentBatchGenId" 
+
+, 0 
+
+, 0 
+
+, 0 
+
+from dbo."ApplicantBatch" ab 
+
+join dbo."Document" d on ab."ApplicantBatchGenId" = d."ApplicantBatchGenId" 
+
+join dbo."DocumentBatch" db on ab."DocumentBatchGenId" = db."DocumentBatchGenId" 
+
+join dbo."Document_DocumentType" ddt on d."DocumentGenId" = ddt."DocumentGenId" 
+
+join dbo."DocumentPage" dp on d."DocumentGenId" = dp."DocumentGenId" 
+
+left join (
+
+select 
+
+ab."DocumentBatchGenId" 
+
+, d."DocumentGenId" 
+
+, d."CreatedDate" 
+
+, d."CreatedBy" 
+
+from dbo."ApplicantBatch" ab
+
+join dbo."Document" d on ab."ApplicantBatchGenId" = d."ApplicantBatchGenId" 
+
+join dbo."DocumentBatch" db on ab."DocumentBatchGenId" = db."DocumentBatchGenId" 
+
+join dbo."Document_DocumentType" ddt on d."DocumentGenId" = ddt."DocumentGenId" 
+
+join dbo."DocumentPage" dp on d."DocumentGenId" = dp."DocumentGenId" 
+
+where 
+
+ab."ApplicantGenId" = _relatedcasegenid
+
+and ab."ApplicationSequence" = _relatedcaseapplicationsequence
+
+and dp.is_split_record = 'N'
+
+)newDoc on newDoc."DocumentBatchGenId" = ab."DocumentBatchGenId" 
+
+where
+
+newDoc."DocumentGenId" is null
+
+and ab."ApplicantGenId"  = _originalcasegenid
+
+and ab."ApplicationSequence" = _originalcaseapplicationsequence
+
+and dp.is_split_record = 'N'
+
+order by ab."DocumentBatchGenId" asc
+
+;
+
+
+
+select "DocumentGenId" from temp2 where "Processed" = 0 limit 1 into parentDocId;
+
+
+
+while parentDocId > 0 loop
+
+   newApplicantBatchGenId:=0;
+
+   documentBatchGenId:=0;
+
+   newDocumentGenId:=0;
+
+   applicantBatchGenId:=0;
+
+   
+
+   select "DocumentBatchGenId" from temp2 where "DocumentGenId" = parentDocId into documentBatchGenId;
+
+   select "NewDocumentGenId" from temp2 where "DocumentGenId" = parentDocId into newDocumentGenId;
+
+   select "ApplicantBatchGenId" from temp2 where "DocumentGenId" = parentDocId into applicantBatchGenId;
+
+   select "NewApplicantBatchGenId" from temp2 where "DocumentGenId" = parentDocId into newApplicantBatchGenId;
+
+   
+
+   if newApplicantBatchGenId = 0 then
+
+                  
+
+         insert into dbo."ApplicantBatch"("ApplicantGenId","ApplicationSequence","DocumentBatchGenId","IntakeGenId","UserGenId","CreatedDate")         
+
+         select "ChildCaseGenId","ApplicationSequence","DocumentBatchGenId",1549,null,current_timestamp from temp2 where "DocumentGenId" = parentDocId limit 1;
+
+        
+
+        select max(ab."ApplicantBatchGenId") from dbo."ApplicantBatch" ab into newApplicantBatchGenId;
+
+        update temp2 set "NewApplicantBatchGenId" = newApplicantBatchGenId where "ApplicantBatchGenId" = applicantBatchGenId;
+
+         
+
+   end if;
+
+           
+
+    insert into dbo."Document"("ApplicantBatchGenId","CreatedDate","CreatedBy")
+
+    select newApplicantBatchGenId,"CreatedDate" ,"CreatedBy" from temp2 where "DocumentGenId" = parentDocId limit 1;
+
+   
+
+    select max(d."DocumentGenId") from dbo."Document" d into newDocumentGenId;
+
+    update temp2 set "NewDocumentGenId" = newDocumentGenId where "DocumentGenId" = parentDocId;
+
+  
+
+    insert into dbo."Document_DocumentType"("DocumentTypeGenId","DocumentGenId","IndividualGenId","IncomeGenId","CreatedDate","CreatedBy","UpdatedDate","UpdatedBy")
+
+    select "DocumentTypeGenId","NewDocumentGenId","IndividualGenId","IncomeGenId","CreatedDate","CreatedBy",current_timestamp,1111 from temp2 where "DocumentGenId" = parentDocId limit 1;
+
+          
+
+    update temp2 set "Processed" = 1 where "DocumentGenId" = parentDocId;
+
+   
+
+      parentDocId:=0;
+
+   
+
+      select "DocumentGenId" from temp2 where "Processed" = 0 limit 1 into parentDocId;
+
+      
+
+end loop;
+
+
+
+insert into dbo."DocumentPage"("DocumentGenId","DocumentImage","MimeType","PageNumber","CreatedDate","CreatedBy","UpdatedDate","UpdatedBy","RetireDate", "RetiredBy",retrive_status, conversion_file_path, image_file_path, folder_name, conversion_status, "DocumentBase64Image")                    
+
+select 
+
+tmp."NewDocumentGenId"
+
+, dp."DocumentImage" 
+
+, dp."MimeType" 
+
+, dp."PageNumber" 
+
+, dp."CreatedDate" 
+
+, dp."CreatedBy" 
+
+, dp."UpdatedDate" 
+
+, dp."UpdatedBy" 
+
+, dp."RetireDate" 
+
+, dp."RetiredBy" 
+
+, 0
+
+, dp.conversion_file_path 
+
+, dp.image_file_path 
+
+, dp.folder_name 
+
+, 'PDF_FILE_NOT_CREATED'::character varying
+
+, dp."DocumentBase64Image" 
+
+from dbo."DocumentPage" dp
+
+join temp2 tmp on dp."DocumentGenId" = tmp."DocumentGenId" and tmp."Processed" = 1
+
+where dp.is_split_record = 'N'
+
+;
+
+
+
+return 'success';
+
+ END
+
+ $function$
+

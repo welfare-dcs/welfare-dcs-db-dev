@@ -1,0 +1,23 @@
+CREATE OR REPLACE FUNCTION public.changescanstatus(_applicationgenid integer, _applicationsequenceid integer, _scanstatusid integer)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+
+BEGIN
+
+
+
+
+
+   update dbo."Application" set "ScanStatusGenId" = case when "ScanStatusGenId" = 1 then 2 when "ScanStatusGenId" = 4 then 5 when "ScanStatusGenId" is null then "ScanStatusGenId" else "ScanStatusGenId" end, "ScanStatusDate" = current_timestamp where "ApplicantGenId" = _applicationgenid and "ApplicationSequence" = _applicationsequenceid;
+
+
+
+--commit;
+
+  
+
+ END;
+
+ $function$
+

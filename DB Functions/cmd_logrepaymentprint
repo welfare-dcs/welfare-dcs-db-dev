@@ -1,0 +1,35 @@
+CREATE OR REPLACE FUNCTION public.cmd_logrepaymentprint(_repaymentrequestgenid integer, _userid integer)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+declare RepaymentLetterHistoryGenId int4;
+
+
+
+begin
+
+   
+
+   select max(rlh."RepaymentLetterHistoryGenId")+1 from dbo."RepaymentLetterHistory" rlh into RepaymentLetterHistoryGenId;
+
+   
+
+   insert into dbo."RepaymentLetterHistory" ("RepaymentLetterHistoryGenId" ,"Amount","RepaymentRequestGenId","CreatedBy","CreateDate") 
+
+   select RepaymentLetterHistoryGenId,"Amount","RepaymentRequestGenId",_UserId, current_date  from dbo."RepaymentRequest" where "RepaymentRequestGenId" = _RepaymentRequestGenId;
+
+
+
+   insert into dbo."RepaymentLetterHistory_MonitoringItem" ("RepaymentLetterHistoryGenId" ,"MonitoringItemGenId")
+
+   select RepaymentLetterHistoryGenId,"MonitoringItemGenId" from dbo."RepaymentRequest_MonitoringItem" where "RepaymentRequestGenId" = _RepaymentRequestGenId;
+
+
+
+ END
+
+ $function$
+

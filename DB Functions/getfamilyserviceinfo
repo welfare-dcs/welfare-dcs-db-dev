@@ -1,0 +1,37 @@
+CREATE OR REPLACE FUNCTION public.getfamilyserviceinfo(_applicantgenid integer, _applicationsequenceid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+begin
+
+
+
+   
+
+      select jsonb_agg(row_to_json(t)) from (select 
+
+coalesce(f."ServiceNeedGenId"::character varying,coalesce(nullif(split_part(f."ServiceNeedDescription", ')', 1),'')),'0')::integer as "customServiceNeedGenId"
+
+, f.*, u.*, i.* from dbo."Family" f
+
+      join public.userrelationtypes u on f."ApplicantRelationshipGenId" = u.refrelationshiptypegenid
+
+      left join dbo."Individual" i on f."IndividualGenId" = i."IndividualGenId" 
+
+      where f."ApplicantGenId" = _applicantGenId and f."ApplicationSequence" = _applicationSequenceId and f."ApplicantRelationshipGenId" in (1,4,5,6,7,20))t into result;
+
+      
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

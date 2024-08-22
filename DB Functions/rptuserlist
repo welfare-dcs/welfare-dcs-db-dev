@@ -1,0 +1,49 @@
+CREATE OR REPLACE FUNCTION public.rptuserlist(_offset integer, _limit integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total int4;
+
+declare offsetValue int4 = 10;
+
+
+
+begin
+
+
+
+   offsetValue = offsetValue * _offset;
+
+    if _offset = 0 then   
+
+     select count(*) FROM public.fssauser A where A.status != 'D' into total;
+
+    else
+
+     total = 0;
+
+    end if;
+
+
+
+   select Json_agg(row_to_json(t1)) from (select * FROM public.fssauser A where A.status != 'D' 
+
+    order by A.username asc)t1 into result;
+
+
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('totalCount',total,'data',result)),'[]');
+
+
+
+END;
+
+ $function$
+

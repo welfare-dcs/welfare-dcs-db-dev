@@ -1,0 +1,51 @@
+CREATE OR REPLACE FUNCTION public.rptlistpetramcustomeroles()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+   select Json_agg(t) from (
+
+
+
+select menuid as groupid,menudesc as description,Json_agg(Json_build_object(
+
+
+
+   'id',menusubid,'description',menusubmenu,'active','N','read','N','write','N')) as details from  
+
+
+
+   (  select A.description as menudesc,B.menuid,B.menusubid,B.description as menusubmenu from public.mstmenu A 
+
+
+
+  LEFT JOIN public.mstsubmenu B on A.menuid = B.menuid
+
+
+
+  where A.status = true and B.status = true
+
+
+
+  order by A.seqno,B.seqno ASC)t1 group by menuid,menudesc)t into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

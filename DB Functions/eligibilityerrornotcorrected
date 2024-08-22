@@ -1,0 +1,91 @@
+CREATE OR REPLACE FUNCTION public.eligibilityerrornotcorrected(_monitoringsequencegenid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare monitorsequence json;
+
+declare casenumber character varying;
+
+begin
+
+
+
+   select concat(ms."ApplicantGenId",'-',ms."ApplicationSequence") from dbo."MonitoringSequence" ms where ms."MonitoringSequenceGenId" = _monitoringsequencegenid into casenumber;
+
+   
+
+select Json_agg(row_to_json(t1)) from (
+
+select e."RemovedByPolicy",
+
+e."CannotBeCorrected",
+
+e."FixDate",
+
+e."ApprovedInd",
+
+a."AppealAcceptDate", 
+
+et."ErrorTypeGenId"
+
+ from dbo."Error" e 
+
+ join dbo."MonitoringSequence" ms on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+ left join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+--inner join dbo."ref_ErrorCategory" rec on et."errorCategoryGenId" = rec."ErrorCategoryGenId"
+
+  left join dbo."Appeals" a on e."ErrorGenId" = a.errorid 
+
+where 
+
+concat(ms."ApplicantGenId",'-',ms."ApplicationSequence") = casenumber
+
+and case when 
+
+   e."RemovedByPolicy" is null 
+
+--   and e."CannotBeCorrected" is null 
+
+   and e."FixDate" is null 
+
+   and (e."ApprovedInd" is false or e."ApprovedInd" is null)
+
+   and a."AppealAcceptDate" is null 
+
+   and e.errorstatus is true
+
+then true else false end
+
+)t1 into result;
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+ms."ApplicantGenId" as "applicantgenid"
+
+, ms."ApplicationSequence" as "applicationsequence"
+
+from dbo."MonitoringSequence" ms where ms."MonitoringSequenceGenId" = _monitoringsequencegenid
+
+)t1 into monitorsequence;
+
+
+
+RETURN json_build_object('errorlist',COALESCE(result,'[]'),'monitorsequence',COALESCE(monitorsequence,'[]'));
+
+
+
+ END;
+
+ $function$
+

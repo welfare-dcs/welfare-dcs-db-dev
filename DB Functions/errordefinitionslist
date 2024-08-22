@@ -1,0 +1,79 @@
+CREATE OR REPLACE FUNCTION public.errordefinitionslist(_monitoritemgenid integer DEFAULT 0)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+mi."Name" 
+
+, mi."MonitoringItemGenId" 
+
+, mi."Description"
+
+, mi."EffectiveDate" 
+
+, mi."RetireDate" 
+
+, mi."OrderNum" 
+
+, mi."MonitoringItemGroupGenId" 
+
+,(
+
+select Json_agg(row_to_json(t1)) from (
+
+select concat(et.errornumber,'.',et.sort) as "error_item"
+
+, et."Error" as "error"
+
+, et."ErrorTypeGenId"
+
+, et."errorCategoryGenId" 
+
+, case when et."DeleteDate" is not null then true else false end as "deactive_status"
+
+from public."ErrorType" et 
+
+where et."MonitoringItemGenId" = mi."MonitoringItemGenId" 
+
+--and et."DeleteDate" is null
+
+order by et.sort asc
+
+)t1
+
+) as "errortype"
+
+from dbo."MonitoringItem" mi 
+
+where 
+
+case when _monitoritemgenid = 0 then true else mi."MonitoringItemGenId" = _monitoritemgenid end
+
+and mi."MonitoringItemGroupGenId" = 1
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

@@ -1,0 +1,25 @@
+CREATE OR REPLACE FUNCTION public.userresettime(_username character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+begin
+
+   
+
+   update public.fssauser set passwrdreset = now() where username = _username;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

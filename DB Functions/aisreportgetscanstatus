@@ -1,0 +1,47 @@
+CREATE OR REPLACE FUNCTION public.aisreportgetscanstatus(_applicantgenid integer, _applicationsequence integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+a."ApplicantGenId" 
+
+, a."ApplicationSequence" 
+
+, a."ScanStatusGenId" 
+
+, rss."ScanStatusDescription2" 
+
+from dbo."Application" a 
+
+join dbo."ref_ScanStatus" rss on a."ScanStatusGenId" = rss."ScanStatusGenId" 
+
+where a."ApplicantGenId" = _applicantgenid
+
+and a."ApplicationSequence" = _applicationsequence
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

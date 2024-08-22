@@ -1,0 +1,131 @@
+CREATE OR REPLACE FUNCTION public.materialized_family_count(_casenumber integer, _casesequencenumber integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+begin
+
+
+
+if _casenumber = 0 and _casesequencenumber = 0 then
+
+
+
+DELETE FROM public.family_coapplicant_count;
+
+
+
+DELETE FROM public.family_coapplicant_hasjobsearch_count;
+
+
+
+INSERT INTO public.family_coapplicant_count
+
+(applicationnumber, total)
+
+(
+
+  SELECT concat(f2."ApplicantGenId", '-', f2."ApplicationSequence") AS applicationnumber,
+
+    count(*) AS total
+
+   FROM dbo."Family" f2
+
+  WHERE (f2."ApplicantRelationshipGenId" = ANY (ARRAY[4, 5, 6, 7, 20])) AND (f2."IndividualStatusDescription"::text <> ALL (ARRAY['Not Set'::character varying::text, 'Removed'::character varying::text, 'Waiting List'::character varying::text]))
+
+  GROUP BY (concat(f2."ApplicantGenId", '-', f2."ApplicationSequence"))
+
+);
+
+
+
+INSERT INTO public.family_coapplicant_hasjobsearch_count
+
+(applicationnumber, total)
+
+(
+
+  SELECT concat(f2."ApplicantGenId", '-', f2."ApplicationSequence") AS applicationnumber,
+
+    count(*) AS total
+
+   FROM dbo."Family" f2
+
+  WHERE (f2."ApplicantRelationshipGenId" = ANY (ARRAY[4, 5, 6, 7, 20])) AND f2."HasJobSearch" IS NOT FALSE AND (f2."IndividualStatusDescription"::text <> ALL (ARRAY['Not Set'::character varying::text, 'Removed'::character varying::text, 'Waiting List'::character varying::text]))
+
+  GROUP BY (concat(f2."ApplicantGenId", '-', f2."ApplicationSequence"))
+
+);
+
+
+
+else
+
+
+
+DELETE FROM public.family_coapplicant_count WHERE applicationnumber=concat(_casenumber,'-',_casesequencenumber);
+
+
+
+DELETE FROM public.family_coapplicant_hasjobsearch_count WHERE applicationnumber=concat(_casenumber,'-',_casesequencenumber);
+
+
+
+INSERT INTO public.family_coapplicant_count
+
+(applicationnumber, total)
+
+(
+
+  SELECT concat(f2."ApplicantGenId", '-', f2."ApplicationSequence") AS applicationnumber,
+
+    count(*) AS total
+
+   FROM dbo."Family" f2
+
+  WHERE (f2."ApplicantRelationshipGenId" = ANY (ARRAY[4, 5, 6, 7, 20])) AND (f2."IndividualStatusDescription"::text <> ALL (ARRAY['Not Set'::character varying::text, 'Removed'::character varying::text, 'Waiting List'::character varying::text])) and f2."ApplicantGenId" = _casenumber and f2."ApplicationSequence" = _casesequencenumber
+
+  GROUP BY (concat(f2."ApplicantGenId", '-', f2."ApplicationSequence"))
+
+);
+
+
+
+INSERT INTO public.family_coapplicant_hasjobsearch_count
+
+(applicationnumber, total)
+
+(
+
+  SELECT concat(f2."ApplicantGenId", '-', f2."ApplicationSequence") AS applicationnumber,
+
+    count(*) AS total
+
+   FROM dbo."Family" f2
+
+  WHERE (f2."ApplicantRelationshipGenId" = ANY (ARRAY[4, 5, 6, 7, 20])) AND f2."HasJobSearch" IS NOT FALSE AND (f2."IndividualStatusDescription"::text <> ALL (ARRAY['Not Set'::character varying::text, 'Removed'::character varying::text, 'Waiting List'::character varying::text])) and f2."ApplicantGenId" = _casenumber and f2."ApplicationSequence" = _casesequencenumber
+
+  GROUP BY (concat(f2."ApplicantGenId", '-', f2."ApplicationSequence"))
+
+);
+
+end if;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object(
+
+'data',coalesce(result,'[]')
+
+)),'[]');
+
+
+
+ END;
+
+ $function$
+

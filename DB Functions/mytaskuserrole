@@ -1,0 +1,43 @@
+CREATE OR REPLACE FUNCTION public.mytaskuserrole()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json= '{
+
+"eligibilityOfficeUUID":"e386daa3-7da7-4c71-b655-624402306c0a",
+
+"monitorUUID":"6aa777ab-4f58-46a1-9740-644fa10fc9bb",
+
+"policyConsultantUUID":"c26ea8c3-fae5-4df2-8044-fd062889c2da",
+
+"eligibilityOfficeManagerUUID":"eff5ef00-5d02-44fd-9256-093e0885b08c",
+
+"monitoManagerUUID":"ccc62245-cb4c-4f90-80bd-884f12dc6600",
+
+"superuserUUID":"1e9f8d6f-8c33-41c4-9aaf-e97ea909a88b",
+
+"readOnlyUUID":"64287e3b-de2d-4eab-88f1-191a3d19f2d3",
+
+"scanOnlyUUID":"64287e3b-de2d-4eab-88f1-191a3d19f2d3"
+
+}';
+
+
+
+begin
+
+
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

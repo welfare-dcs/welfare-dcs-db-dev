@@ -1,0 +1,39 @@
+CREATE OR REPLACE FUNCTION public.eligibilitymonitornoteslist(_casenumber character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+   select Json_agg(row_to_json(t1)) from (
+
+   select e.monitornote as "note",e.createdate as "date",f.username as "createdby" from public.eligibilitymonitornotes e
+
+inner join public.fssauser f on e.createdby = f.id
+
+where 
+
+e.casenumber = _casenumber
+
+   )t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+
+
+ $function$
+

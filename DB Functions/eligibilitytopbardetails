@@ -1,0 +1,151 @@
+CREATE OR REPLACE FUNCTION public.eligibilitytopbardetails(_caseid character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare top_bar_details json;
+
+begin
+
+
+
+select row_to_json(t) from (
+
+select
+
+ ms."MonitoringSequence" as "monitoringsequence"
+
+,
+
+(
+
+select array(
+
+ select distinct ms2."MonitoringSequenceGenId" from dbo."MonitoringSequence" ms2 where ms2."ApplicantGenId" = a."ApplicantGenId" and ms2."ApplicationSequence" = a."ApplicationSequence"
+
+)::text[]
+
+)
+
+ as "MonitoringSequenceArrayGenId"
+
+, ms."MonitoringSequenceGenId" as "MonitoringSequenceGenId"
+
+, rss."ScanStatusDescription" as "scanstatus"
+
+, case
+
+when a."TerminationDate" is not null then 'Terminated'
+
+when rss."ScanStatusGenId" in (1) then 'Open'
+
+when (select count(*) from dbo."Error" e
+
+inner join dbo."Appeals" a4 on e."ErrorGenId" = a4.errorid
+
+where e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and a4."AppealAcceptDate" is null and a4."AppealDenyDate" is null) > 0 or rss."ScanStatusGenId" in (5) then 'Pending Approval'
+
+when rss."ScanStatusGenId" in (2,4) then 'In Progress'
+
+when rss."ScanStatusGenId" in (3,9) then 'Completed'
+
+end as "case_status"
+
+, a."ScanStatusGenId" as "ScanStatusGenId"
+
+, a."TerminationDate" as "terminationdate"
+
+,
+
+(select rp."PriorityDescription" from dbo."Family" f
+
+left join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId" where f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a."ApplicationSequence" and f."ApplicantInd" is true and f."IndividualStatusDescription" not in ('Not Set','Removed','Waiting List'))
+
+as "applicationpriority"
+
+,
+
+(select
+
+case when f."ServiceNeedGenId" is not null then split_part(rsn."ServiceNeedDescription",')', 2) else
+
+split_part(f."ServiceNeedDescription",')', 2) end
+
+from dbo."Family" f
+
+left join dbo."ref_ServiceNeed" rsn on f."ServiceNeedGenId" = rsn."ServiceNeedGenId"
+
+where f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a."ApplicationSequence" and f."ApplicantInd" is true and f."IndividualStatusDescription" not in ('Not Set','Removed','Waiting List'))
+
+as "serviceneed"
+
+, teo.description as "intakeagency"
+
+,a2."ApplicantGenId"
+
+, rc."CountyName" as "county"
+
+, a."ScanStatusDate" as "scandate"
+
+, f2.username as "reviewedby"
+
+, ms."ReviewedDate" as "revieweddate"
+
+, a.qa_review_indicator
+
+, rtbsr."ToBeScannedReasonDescription" as "trigger_type" 
+
+, a."ScanStatusDate" as "trigger_date"
+
+, (select g."ruleValue" from public.globals g where g."globalId" = 10) as "appeal_rule_value"
+
+, a.eligibility_no_error 
+
+from dbo."Applicant" a2
+
+join dbo."Application" a on a2."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId" and a."ApplicationSequence" = ms."ApplicationSequence"
+
+left join dbo."ref_ScanStatus" rss on a."ScanStatusGenId" = rss."ScanStatusGenId"
+
+left join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId" and  a."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+left join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.fssauser f2 on ms."ReviewedBy" = f2.id
+
+left join dbo."ref_ToBeScannedReason" rtbsr on a."ToBeScannedReason" = rtbsr."ToBeScannedReasonGenId" 
+
+where concat(a."ApplicantGenId",concat('-',a."ApplicationSequence"))= _caseid
+
+order by ms."MonitoringSequenceGenId" desc
+
+limit 1
+
+)t  into top_bar_details;
+
+
+
+
+
+select row_to_json(t) from (select COALESCE(top_bar_details,'{}') as "top_bar_details")t  into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

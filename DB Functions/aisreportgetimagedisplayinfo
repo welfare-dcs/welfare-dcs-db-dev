@@ -1,0 +1,73 @@
+CREATE OR REPLACE FUNCTION public.aisreportgetimagedisplayinfo(_applicantgenid integer, _applicationsequence integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+ddt."DocumentTypeGenId" as "ImageTypeGenId"
+
+, dp."DocumentPageGenId" as "ImageGenId"
+
+, d."DocumentGenId"  as "DocumentGenId"
+
+, rdt."DocumentTypeName" as "ScanImageTypeDescription"
+
+, ab."ApplicantBatchGenId" 
+
+,coalesce(db."CreatedDate", ab."CreatedDate") as "CreateDate"
+
+, dp."PageNumber" 
+
+from dbo."ApplicantBatch" ab 
+
+join dbo."Document" d on ab."ApplicantBatchGenId" = d."ApplicantBatchGenId" 
+
+join dbo."DocumentPage" dp on d."DocumentGenId" = dp."DocumentGenId" 
+
+join dbo."DocumentBatch" db on ab."DocumentBatchGenId" = db."DocumentBatchGenId" 
+
+join dbo."Document_DocumentType" ddt on d."DocumentGenId" = ddt."DocumentGenId" 
+
+join dbo."ref_DocumentType" rdt on ddt."DocumentTypeGenId" = rdt."DocumentTypeGenid" 
+
+where ab."ApplicantGenId" = _applicantgenid
+
+and ab."ApplicationSequence" = _applicationsequence
+
+and dp.is_split_record = 'N'
+
+--and ddt."DocumentDocumentTypeGenId" = (
+
+--select max(ddt2."DocumentDocumentTypeGenId") from dbo."Document_DocumentType" ddt2 where ddt2."DocumentGenId" = dp."DocumentGenId" 
+
+--)
+
+group by ddt."DocumentTypeGenId", dp."DocumentGenId", dp."DocumentPageGenId", rdt."DocumentTypeName", ab."ApplicantBatchGenId", db."CreatedDate", dp."PageNumber", d."DocumentGenId"
+
+order by ab."ApplicantBatchGenId" asc , db."CreatedDate" asc
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

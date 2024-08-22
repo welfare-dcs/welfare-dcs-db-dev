@@ -1,0 +1,69 @@
+CREATE OR REPLACE FUNCTION public.serviceneedgenid()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json= '[
+
+{
+
+"label":"Employment",
+
+"ServiceNeedGenId":[109,1]
+
+},
+
+{
+
+"label":"Education",
+
+"ServiceNeedGenId":[111,2]
+
+},
+
+{
+
+"label":"Both",
+
+"ServiceNeedGenId":[112,3]
+
+},
+
+{
+
+"label":"Child Protective Services",
+
+"ServiceNeedGenId":[4]
+
+},
+
+{
+
+"label":"None",
+
+"ServiceNeedGenId":[6]
+
+}
+
+]
+
+';
+
+
+
+begin
+
+
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

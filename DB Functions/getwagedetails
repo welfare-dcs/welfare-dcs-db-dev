@@ -1,0 +1,57 @@
+CREATE OR REPLACE FUNCTION public.getwagedetails(_caseid character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+DECLARE result json;
+
+begin
+
+   
+
+   select Json_agg(row_to_json(t1)) from (
+
+select concat(i."IndividualLastName" ,' ', i."IndividualFirstName") as "name"
+
+, i."IndividualGenId"  
+
+, fi."PaymentDate" as "paymentdate"
+
+, fi."Amount" as "paidamount"
+
+, fi."IncomeFrequencyCodeDescription" as "paymentfrequency"
+
+, urt.relationshiptypedesc as "Relationshiptype"
+
+, fi."IncomeSourceDescription" as "incomesourcedescription"
+
+, case when ri.eligible = 1 then true else false end as "notexemptincome"
+
+from dbo."Family" f
+
+join dbo."Individual" i on f."IndividualGenId" = i."IndividualGenId" and f."ApplicantRelationshipGenId" in (1,4,5,6,7,20)
+
+join dbo."FamilyIncome" fi on f."ApplicantGenId" = fi."ApplicantGenId" and f."ApplicationSequence" = fi."ApplicationSequence" and f."IndividualGenId" = fi."IndividualGenId" 
+
+join userrelationtypes urt on f."ApplicantRelationshipGenId" = urt.refrelationshiptypegenid
+
+join public.ref_incomesource ri on lower(fi."IncomeSourceDescription") = lower(ri.incomesourcedesc) 
+
+where concat(f."ApplicantGenId",'-',f."ApplicationSequence") = _caseid
+
+and fi."DeletedDate" is null
+
+--and ri.eligible = 1
+
+--group by i."IndividualFirstName" ,i."IndividualLastName" ,i."IndividualGenId" ,fi."PaymentDate" ,fi."Amount" ,fi."IncomeFrequencyCodeDescription" ,urt.relationshiptypedesc 
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+end;
+
+$function$
+

@@ -1,0 +1,14 @@
+CREATE OR REPLACE PROCEDURE public.changescanstatus_new(_applicationgenid integer, _applicationsequenceid integer, _scanstatusid integer)
+ LANGUAGE plpgsql
+AS $procedure$
+
+BEGIN
+
+    update dbo."Application" set "ScanStatusGenId" = _scanstatusid where "ApplicantGenId" = _applicationgenid and "ApplicationSequence" = _applicationsequenceid;
+
+   COMMIT;
+
+END;
+
+$procedure$
+

@@ -1,0 +1,79 @@
+CREATE OR REPLACE FUNCTION public.mytaskfilter()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json= '
+
+[
+
+  {
+
+    "id": "EO QA Review",
+
+    "label": "EO QA Review"
+
+  },
+
+  {
+
+    "id": "Critical Review",
+
+    "label": "Critical Review"
+
+  },
+
+  {
+
+    "id": "Appeal Denial",
+
+    "label": "Appeal Denial"
+
+  },
+
+  {
+
+    "id": "Correction Denial",
+
+    "label": "Correction Denial"
+
+  },
+
+  {
+
+    "id": "Payment Reduction Preview",
+
+    "label": "Payment Reduction Preview"
+
+  },
+
+  {
+
+    "id": "Payment Reduction Review - FINAL Report for GAR",
+
+    "label": "Payment Reduction Final"
+
+  }
+
+]
+
+';
+
+
+
+begin
+
+
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

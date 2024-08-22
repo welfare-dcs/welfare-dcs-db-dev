@@ -1,0 +1,279 @@
+CREATE OR REPLACE FUNCTION public.completedqueuetable(_offset integer, _limit integer, _casenumber character varying, _intakeagency character varying, _casepriority character varying, _startdate character varying, _enddate character varying, _sortcolumn character varying, _sortorder character varying, _qaindicator character varying, _eligibility_user_id character varying, _monitor_user_id character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total int4;
+
+declare offsetValue int4 = 10;
+
+
+
+begin
+
+
+
+    offsetValue = offsetValue * _offset;
+
+
+
+if _offset = 0 then
+
+
+
+select
+
+count(t)
+
+from
+
+(
+
+select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName"),' ',initcap(a."ApplicantLastName")) as "applicantname"
+
+, a2."ApplicationSignedDate" as "applicationdate",a2."LastBatchDate" 
+
+, a2."ApplicationCompleteDate" as "completeddate"
+
+, teo.description as "eligibilityoffice"
+
+, rp."PriorityDescription" as "casepriority"
+
+,fsu.firstname,fsu.lastname
+
+,a2.qa_review_indicator
+
+, concat(mr.user_last_name,' ',mr.user_first_name) as "review_by_eligiblity"
+
+, mr.created_at as "review_by_eligiblity_date"
+
+, concat(mr2.user_last_name,' ',mr2.user_first_name) as "review_by_monitor"
+
+, mr2.created_at as "review_by_monitor_date"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId" and case when _startdate = '' and _enddate = '' then true else a2."ApplicationSignedDate"::date between to_date(_startdate, 'dd-mm-yyyy') and to_date(_enddate, 'dd-mm-yyyy') end and (a2."IsLimitedEligibility" is true or (a2."ScanStatusGenId" in (3,9) or a2."TerminationDate" is not null)) and case when _casenumber = '' then true else concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") = _casenumber end
+
+left join dbo."MonitoringSequence" ms on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+inner join dbo."Family" f on a2."ApplicantGenId" = f."ApplicantGenId" and a2."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+left join dbo."ReviewLock" r1 on  r1."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."ReviewHistory" rh on rh."ReviewHistoryGenId" = r1."ReviewHistoryGenId"
+
+left join fssauser fsu1 on ms."ReviewedBy" = fsu1.id
+
+left join fssauser fsu on rh."UserGenId" = fsu.id
+
+left join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join dbo."ref_ScanStatus" rss on a2."ScanStatusGenId" = rss."ScanStatusGenId"
+
+left join public.case_by_scanstatus cbs on  cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+left join public.monitoringsequence_reviewby as mr on a2."ApplicantGenId" = mr."ApplicantGenId" and a2."ApplicationSequence" = mr."ApplicationSequence" and mr.user_role in ('eu','eom') and case when _eligibility_user_id = '' then mr.last_elibility_review_by_indicator is true else true end
+
+left join public.monitoringsequence_reviewby as mr2 on a2."ApplicantGenId" = mr2."ApplicantGenId" and a2."ApplicationSequence" = mr2."ApplicationSequence" and mr2.user_role in ('mu', 'mm') and case when _monitor_user_id = '' then mr2.last_monitor_review_by_indicator is true else true end
+
+where
+
+case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _casepriority = '' then true else rp."PriorityGenId" = any(_casepriority::int[]) end
+
+and case when _qaindicator = '' then true else a2.qa_review_indicator = any(_qaindicator::boolean[]) end
+
+and case when _eligibility_user_id = '' then true else mr.review_by = any(_eligibility_user_id::int[]) and mr.last_review_by_indicator is true end
+
+and case when _monitor_user_id = '' then true else mr2.review_by = any(_monitor_user_id::int[]) and mr2.last_review_by_indicator is true end
+
+group by a."ApplicantFirstName",a."ApplicantLastName",a2."ApplicationSignedDate", a2."ApplicationCompleteDate",teo.description,rp."PriorityDescription", a2."ApplicantGenId",a2."ApplicationSequence",fsu.firstname,fsu.lastname,a2."LastBatchDate",a2.qa_review_indicator, mr.user_first_name ,mr.user_last_name ,mr.created_at ,mr2.user_first_name ,mr2.user_last_name ,mr2.created_at 
+
+)t
+
+into total;
+
+
+
+else
+
+
+
+total = 0;
+
+
+
+end if;
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName"),' ',initcap(a."ApplicantLastName")) as "applicantname"
+
+, a2."ApplicationSignedDate" as "applicationdate",a2."LastBatchDate" 
+
+, a2."ApplicationCompleteDate" as "completeddate"
+
+, teo.description as "eligibilityoffice"
+
+, rp."PriorityDescription" as "casepriority"
+
+,fsu.firstname,fsu.lastname
+
+,a2.qa_review_indicator
+
+, concat(mr.user_last_name,' ',mr.user_first_name) as "review_by_eligiblity"
+
+, mr.created_at as "review_by_eligiblity_date"
+
+, concat(mr2.user_last_name,' ',mr2.user_first_name) as "review_by_monitor"
+
+, mr2.created_at as "review_by_monitor_date"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId" and case when _startdate = '' and _enddate = '' then true else a2."ApplicationSignedDate"::date between to_date(_startdate, 'dd-mm-yyyy') and to_date(_enddate, 'dd-mm-yyyy') end and (a2."IsLimitedEligibility" is true or (a2."ScanStatusGenId" in (3,9) or a2."TerminationDate" is not null)) and case when _casenumber = '' then true else concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") = _casenumber end
+
+left join dbo."MonitoringSequence" ms on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+inner join dbo."Family" f on a2."ApplicantGenId" = f."ApplicantGenId" and a2."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+left join dbo."ReviewLock" r1 on  r1."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."ReviewHistory" rh on rh."ReviewHistoryGenId" = r1."ReviewHistoryGenId"
+
+left join fssauser fsu1 on ms."ReviewedBy" = fsu1.id
+
+left join fssauser fsu on rh."UserGenId" = fsu.id
+
+left join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join dbo."ref_ScanStatus" rss on a2."ScanStatusGenId" = rss."ScanStatusGenId"
+
+left join public.case_by_scanstatus cbs on  cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+left join public.monitoringsequence_reviewby as mr on a2."ApplicantGenId" = mr."ApplicantGenId" and a2."ApplicationSequence" = mr."ApplicationSequence" and mr.user_role in ('eu','eom') and case when _eligibility_user_id = '' then mr.last_elibility_review_by_indicator is true else true end
+
+left join public.monitoringsequence_reviewby as mr2 on a2."ApplicantGenId" = mr2."ApplicantGenId" and a2."ApplicationSequence" = mr2."ApplicationSequence" and mr2.user_role in ('mu', 'mm') and case when _monitor_user_id = '' then mr2.last_monitor_review_by_indicator is true else true end
+
+where
+
+case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _casepriority = '' then true else rp."PriorityGenId" = any(_casepriority::int[]) end
+
+and case when _qaindicator = '' then true else a2.qa_review_indicator = any(_qaindicator::boolean[]) end
+
+and case when _eligibility_user_id = '' then true else mr.review_by = any(_eligibility_user_id::int[]) and mr.last_review_by_indicator is true end
+
+and case when _monitor_user_id = '' then true else mr2.review_by = any(_monitor_user_id::int[]) and mr2.last_review_by_indicator is true end
+
+group by a."ApplicantFirstName",a."ApplicantLastName",a2."ApplicationSignedDate", a2."ApplicationCompleteDate",teo.description,rp."PriorityDescription", a2."ApplicantGenId",a2."ApplicationSequence",fsu.firstname,fsu.lastname,a2."LastBatchDate",a2.qa_review_indicator, mr.user_first_name ,mr.user_last_name ,mr.created_at ,mr2.user_first_name ,mr2.user_last_name ,mr2.created_at 
+
+order by
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('casenumber') then a2."ApplicantGenId" end) asc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('casenumber') then a2."ApplicationSequence" end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('casenumber') then a2."ApplicantGenId" end) desc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('casenumber') then a2."ApplicationSequence" end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('applicantname') then concat(a."ApplicantFirstName",' ', a."ApplicantLastName") end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('applicantname') then concat(a."ApplicantFirstName",' ', a."ApplicantLastName") end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('applicationdate') then a2."ApplicationSignedDate" end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('applicationdate') then a2."ApplicationSignedDate" end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('completeddate') then a2."ApplicationCompleteDate" end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('completeddate') then a2."ApplicationCompleteDate" end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('eligibilityoffice') then teo.description end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('eligibilityoffice') then teo.description end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('casepriority') then rp."PriorityDescription" end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('casepriority') then rp."PriorityDescription" end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('lastname') then fsu.lastname end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('lastname') then fsu.lastname end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('qa_review_indicator') then a2.qa_review_indicator end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('qa_review_indicator') then a2.qa_review_indicator end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('review_by_eligiblity') then concat(mr.user_last_name, ' ', mr.user_first_name) end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('review_by_eligiblity') then concat(mr.user_last_name, ' ', mr.user_first_name) end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('review_by_eligiblity_date') then mr.created_at end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('review_by_eligiblity_date') then mr.created_at end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('review_by_monitor') then concat(mr2.user_last_name, ' ', mr2.user_first_name) end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('review_by_monitor') then concat(mr2.user_last_name, ' ', mr2.user_first_name) end) desc,
+
+(case when lower(_sortorder) = lower('asc') and lower(_sortcolumn) = lower('review_by_monitor_date') then mr2.created_at end) asc,
+
+(case when lower(_sortorder) = lower('desc') and lower(_sortcolumn) = lower('review_by_monitor_date') then mr2.created_at end) desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('totalCount',total,'data',coalesce(result,'[]'))),'[]');
+
+
+
+ END;
+
+ $function$
+

@@ -1,0 +1,65 @@
+CREATE OR REPLACE FUNCTION public.aisreportviewid(_individualgenid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select  
+
+dp."DocumentPageGenId" 
+
+, d."DocumentGenId" 
+
+, coalesce(min(adi.createdate), db."CreatedDate") as "AscentBatchDate"
+
+from dbo."Document_DocumentType" ddt 
+
+--left join dbo."ref_DocumentType" rdt on ddt."DocumentGenId" = rdt."DocumentTypeGenid"  and rdt."IDInd" is true 
+
+left join dbo."Document" d on ddt."DocumentGenId" = d."DocumentGenId" 
+
+left join dbo."ApplicantBatch" ab on d."ApplicantBatchGenId" = ab."ApplicantBatchGenId" 
+
+left join dbo."DocumentBatch" db on ab."DocumentBatchGenId" = db."DocumentBatchGenId" 
+
+left join dbo."DocumentPage" dp on d."DocumentGenId" = dp."DocumentGenId" 
+
+left join dbo."AscentDocIndexes" adi on adi."BatchID"::integer = db."BatchID"::integer 
+
+where ddt."IndividualGenId" = _individualgenid
+
+and ddt."DocumentTypeGenId" = 2
+
+and ddt."DeleteDate" is null
+
+group by 
+
+dp."DocumentPageGenId" 
+
+, d."DocumentGenId" 
+
+,db."CreatedDate"
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

@@ -1,0 +1,169 @@
+CREATE OR REPLACE FUNCTION public.aisreportapplicationversionscandetails(_applicantgenid integer, _applicationsequence integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+a."ApplicantGenId" as "CaseNumber"
+
+, a."ApplicationSequence" as "CaseSeqNumber"
+
+, rsct."ScanStatusDescription" as "ScanCaseTypeDescription"
+
+, a."ScanEligibilityDate" as "ScanEligibilityDate"
+
+, a."ScanStatusDate" as "ScanStatusDate"
+
+, rss."ScanStatusDescription2" as "ScanStatusDescription"
+
+, rtbsr."ToBeScannedReasonDescription" as "ToBeScanReasonDescription"
+
+--, a."CreateDate" as "CreateDate"
+
+, a."CreatedByUserName" as "CreatedByUserName"
+
+, a."CreatedByFirstName" as "CreatedByFirstName"
+
+, a."CreatedByLastName" as "CreatedByLastName"
+
+--, a."UpdateDate" as "UpdateDate"
+
+--, a."UpdatedByUserName" as "UpdatedByUserName"
+
+--, a."UpdatedByFirstName" as "UpdatedByFirstName"
+
+--, a."UpdatedByLastName" as "UpdatedByLastName"
+
+from dbo."Application" a
+
+left join dbo."ref_ScanCaseType" rsct on a."ScanCaseTypeGenId" = rsct."ScanCaseTypeGenId"
+
+left join dbo."ref_ScanStatus" rss on a."ScanStatusGenId" = rss."ScanStatusGenId"
+
+left join dbo."ref_ToBeScannedReason" rtbsr on a."ToBeScannedReason" = rtbsr."ToBeScannedReasonGenId"
+
+where
+
+a."ApplicantGenId" = _applicantgenid
+
+and a."ApplicationSequence" = _applicationsequence
+
+)t1 into result;
+
+
+
+--INSERT INTO aisscandetails
+
+--("ApplicantGenId", "ApplicationSequence", "ScanStatusGenId", "ScanStatusDate", createddate, data_dump)
+
+--VALUES(
+
+--_applicantgenid,
+
+--_applicationsequence,
+
+--coalesce((
+
+--select a."ScanStatusGenId" from dbo."Application" a where a."ApplicantGenId" = _applicantgenid and a."ApplicationSequence" = _applicationsequence
+
+--), null),
+
+--coalesce((
+
+--select a."ScanStatusDate" from dbo."Application" a where a."ApplicantGenId" = _applicantgenid and a."ApplicationSequence" = _applicationsequence
+
+--), null),
+
+--CURRENT_TIMESTAMP,
+
+--COALESCE(result,'[]')
+
+--);
+
+
+
+INSERT INTO public.ais_applicationversionscandetail
+
+("CaseNumber", "CaseSeqNumber", "ScanCaseTypeCode", "ScanStatusDate", "ScanStatusCode", "ToBeScanReasonCode", "CreateDate", "CreatedByUserName", "CreatedByFirstName", "CreatedByLastName", "UpdateDate")
+
+(
+
+select
+
+a. "ApplicantGenId"
+
+, a."ApplicationSequence"
+
+, a."ScanCaseTypeGenId"
+
+, a."ScanStatusDate"
+
+, a."ScanStatusGenId"
+
+, a."ToBeScannedReason"
+
+, current_timestamp
+
+, a."CreatedByUserName"
+
+, a."CreatedByFirstName"
+
+, a."CreatedByLastName"
+
+, current_timestamp
+
+from dbo."Application" a where a."ApplicantGenId" = _applicantgenid and a."ApplicationSequence" = _applicationsequence
+
+);
+
+
+
+DELETE FROM public.case_by_scanstatus
+
+WHERE applicationnumber=concat(_applicantgenid,'-',_applicationsequence);
+
+
+
+INSERT INTO public.case_by_scanstatus
+
+(applicationnumber, total)
+
+(
+
+  SELECT concat(aa."CaseNumber", '-', aa."CaseSeqNumber") ,
+
+    count(aa.*)
+
+   FROM public.ais_applicationversionscandetail aa
+
+  WHERE aa."ScanStatusCode" = ANY (ARRAY[279, 282, 3, 9])
+
+  and aa."CaseNumber" = _applicantgenid and aa."CaseSeqNumber" = _applicationsequence
+
+  GROUP BY (concat(aa."CaseNumber", '-', aa."CaseSeqNumber"))
+
+);
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

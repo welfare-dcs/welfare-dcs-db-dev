@@ -1,0 +1,105 @@
+CREATE OR REPLACE FUNCTION public.criticalerrorqueuetiles(_agency character varying, _county character varying, _fromdate character varying, _todate character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total_critical_error integer;
+
+declare repayment_error integer;
+
+
+
+begin
+
+
+
+select (
+
+select count(*)
+
+from dbo."Error" e 
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId" 
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."MonitoringSequence" ms on e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" 
+
+inner join dbo."Applicant" a on ms."ApplicantGenId" = a."ApplicantGenId" 
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId" 
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+inner join dbo."IntakeAgency" ia on iac."IntakeAgencyCode" = ia."IntakeAgencyCode" 
+
+left outer join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+where 
+
+rec."ErrorCategoryDescription" is not null 
+
+and rec."IsCriticalInd" = true
+
+and case when _agency = 'All' then true else iac."IntakeAgencyCode" = _agency end
+
+and case when _county = 'All' then true else rc."CountyName" = _county end
+
+) into total_critical_error;
+
+ 
+
+select (
+
+SELECT count(*)
+
+FROM dbo."RepaymentRequest" rr 
+
+inner join dbo."MonitoringSequence" ms ON ms."ApplicantGenId" = rr."ApplicantGenId" and ms."ApplicationSequence" = rr."ApplicationSequence" 
+
+inner join dbo."Error" e on e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" 
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on rr."ApplicantGenId" = adr."ApplicantGenId" 
+
+inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId" 
+
+left outer join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+where 
+
+rec."ErrorCategoryDescription" is not null 
+
+and rec."IsCriticalInd" = true
+
+and rr."Amount" > 0
+
+and case when _agency = 'All' then true else iac."IntakeAgencyCode" = _agency end
+
+and case when _county = 'All' then true else rc."CountyName" = _county end
+
+) into repayment_error;
+
+
+
+
+
+select Json_agg(row_to_json(t)) from (select COALESCE(total_critical_error,'0') as "total_critical_error",
+
+    COALESCE(repayment_error,'450') as "repayment_error")t  into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

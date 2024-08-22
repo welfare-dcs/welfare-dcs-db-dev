@@ -1,0 +1,35 @@
+CREATE OR REPLACE FUNCTION public.eligibilityofficecountylist(_eligibilityoffice character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select rc."CountyName" as "lable",rc."CountyGenId" as "id" from dbo."IntakeAgency_County" iac
+
+inner join dbo."ref_County" rc on iac."CountyGenId" = rc."CountyGenId" 
+
+where iac.eligibleofficeid = any(_eligibilityoffice::int[])
+
+group by rc."CountyName",rc."CountyGenId" order by rc."CountyGenId"  asc)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

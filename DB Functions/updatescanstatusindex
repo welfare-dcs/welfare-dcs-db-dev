@@ -1,0 +1,47 @@
+CREATE OR REPLACE FUNCTION public.updatescanstatusindex()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+DECLARE row RECORD;
+
+begin
+
+   
+
+   FOR row in  select t.id,a."ScanStatusGenId",a."ScanCaseTypeGenId",a."ApplicantGenId",a."ApplicationSequence" from (select sdi.id,cast(split_part(sdi."BarCode",'-',1) as int) as applicantid,  cast(split_part(sdi."BarCode",'-',2) as int) as sequenceid  from dbo."ScannedDocsIndex" sdi where sdi."DocumentProcessStatus" = 'INIT' order by "CreatedDate" desc)t left join dbo."Application" a on t.applicantid = a."ApplicantGenId" and t.sequenceid = a."ApplicationSequence" where  a."ScanStatusGenId" is null or a."ScanCaseTypeGenId" is null or  a."ApplicantGenId" is null loop
+
+
+
+        update dbo."ScannedDocsIndex"  set "DocumentProcessStatus" = 'No_Data_Found' where id = row.id;
+
+   
+
+    END LOOP;
+
+   
+
+   FOR row in  select t.id,a."ScanStatusGenId",a."ScanCaseTypeGenId",a."ApplicantGenId",a."ApplicationSequence" from (select sdi.id,cast(split_part(sdi."BarCode",'-',1) as int) as applicantid, cast(split_part(sdi."BarCode",'-',2) as int) as sequenceid  from dbo."ScannedDocsIndex" sdi where sdi."DocumentProcessStatus" = 'No_Data_Found' order by "CreatedDate" desc)t left join dbo."Application" a on t.applicantid = a."ApplicantGenId" and t.sequenceid = a."ApplicationSequence" where  a."ScanStatusGenId" is not null AND a."ScanCaseTypeGenId" is not null AND  a."ApplicantGenId" is not null loop
+
+
+
+        update dbo."ScannedDocsIndex"  set "DocumentProcessStatus" = 'INIT' where id = row.id;
+
+   
+
+    END LOOP;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

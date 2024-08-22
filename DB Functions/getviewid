@@ -1,0 +1,69 @@
+CREATE OR REPLACE FUNCTION public.getviewid(_caseid character varying, _downloadurl character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+DECLARE result json;
+
+begin
+
+   
+
+   select Json_agg(row_to_json(t1)) from (
+
+select q1.name,q1."DateOfBirth"
+
+,coalesce((select Json_agg(row_to_json(t2)) from (
+
+select
+
+min(u.createdon) as "createdon", u.documentid 
+
+, CASE WHEN s.imagepath is not null  THEN CONCAT(_downloadUrl,'/',s.imagepath,'/',s.filename)
+
+     ELSE null
+
+end as filepath
+
+, CASE WHEN s.imagepath is not null  THEN CONCAT(_downloadUrl,'/',s.imagepath,'/',s.documentpagegenid,'.pdf')
+
+     ELSE null
+
+end as pdfpath
+
+, CASE WHEN s.imagepath is not null  THEN CONCAT(s.imagepath,'/',s.documentpagegenid,'.pdf')
+
+     ELSE null
+
+end as "s3path"
+
+from public.userdocument u 
+
+inner join public.scannedimage s on u.documentid = s.id 
+
+where u.individualgenid = q1."IndividualGenId"
+
+group by u.documentid, filepath, pdfpath, "s3path"
+
+)t2
+
+), '[]') as "data"
+
+from (select concat(i."IndividualFirstName",' ', i."IndividualLastName") as "name", i."IndividualGenId",i."DateOfBirth"  from dbo."Family" f
+
+inner join dbo."Individual" i on f."IndividualGenId" = i."IndividualGenId" 
+
+where concat(f."ApplicantGenId",'-',f."ApplicationSequence") = _caseid
+
+)q1
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+end;
+
+$function$
+

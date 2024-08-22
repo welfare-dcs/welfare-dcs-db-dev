@@ -1,0 +1,123 @@
+CREATE OR REPLACE FUNCTION public.eligibilityerrordefinitionslist(_monitorsequencegenid character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+mi."Name" 
+
+, mi."MonitoringItemGenId" 
+
+, mi."Description"
+
+, mi."EffectiveDate" 
+
+, mi."RetireDate" 
+
+, mi."OrderNum" 
+
+, mi."MonitoringItemGroupGenId" 
+
+, case when (mi."RetireDate" is null or mi."RetireDate" AT time zone 'EST' >= current_timestamp AT time zone 'EST') then false else true end as "expiredindicator"
+
+,(
+
+select Json_agg(row_to_json(t1)) from (
+
+select concat(et.errornumber,'.',et.sort) as "error_item"
+
+, et."Error" as "error"
+
+, et."ErrorTypeGenId"
+
+, et."errorCategoryGenId" 
+
+, rec."ErrorCategoryDescription" 
+
+from public."ErrorType" et 
+
+join dbo."ref_ErrorCategory" rec on et."errorCategoryGenId" = rec."ErrorCategoryGenId" 
+
+where et."MonitoringItemGenId" = mi."MonitoringItemGenId" 
+
+and case when _monitorsequencegenid = '' then
+
+et."DeleteDate" is null
+
+else 
+
+(string_to_array(et."ErrorTypeGenId"::character varying,',') && (select array(select distinct e."ErrorTypeGenId" from dbo."Error" e 
+
+where 
+
+e."MonitoringSequenceGenId" = _monitorsequencegenid::integer
+
+)::text[]))
+
+or
+
+(et."DeleteDate" is null)
+
+end 
+
+order by et.sort asc
+
+)t1
+
+) as "errortype"
+
+from dbo."MonitoringItem" mi 
+
+where 
+
+mi."MonitoringItemGroupGenId" = 1
+
+--and (mi."RetireDate" is null or mi."RetireDate"::date >= current_date)
+
+and case when _monitorsequencegenid = '' then (mi."RetireDate" is null or mi."RetireDate" AT time zone 'EST' >= current_timestamp AT time zone 'EST')
+
+and mi."EffectiveDate"::date AT time zone 'EST' < current_timestamp AT time zone 'EST'
+
+else 
+
+string_to_array(mi."MonitoringItemGenId"::character varying,',') && (select array(select distinct et."MonitoringItemGenId" from dbo."Error" e 
+
+join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId" 
+
+where 
+
+e."MonitoringSequenceGenId" = _monitorsequencegenid::integer)::text[])
+
+or ((mi."RetireDate" is null or mi."RetireDate" AT time zone 'EST' >= current_timestamp AT time zone 'EST')
+
+and mi."EffectiveDate"::date AT time zone 'EST' < current_timestamp AT time zone 'EST')
+
+end
+
+order by mi."OrderNum" asc
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

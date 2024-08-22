@@ -1,0 +1,71 @@
+CREATE OR REPLACE FUNCTION public.eligibilityimage(_caseid character varying, _applicantid integer, _applicantsequenceid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+DECLARE mappedidresult json;
+
+begin
+
+
+
+select Json_agg(row_to_json(t)) from (
+
+select s.id,s.scannedimageuid,s.category ,s.imagepath ,s.filename ,s.lable,s.ispermanent,s.batchno
+
+,concat(s2.documentpagegenid,'.pdf') as pdfimage
+
+,coalesce(db."CreatedDate", ab."CreatedDate") as batchdate from public.scannedimagelist s 
+
+inner join scannedimage s2 on s2.id = s.scannedimageuid
+
+left join dbo."ApplicantBatch" ab on ab."ApplicantBatchGenId" = s.batchno
+
+left join dbo."DocumentBatch" db on ab."DocumentBatchGenId" = db."DocumentBatchGenId" 
+
+where s.applicationid = _caseid
+
+and s.category is not null 
+
+and s.lable is not null
+
+and s.active = true
+
+order by s.batchno,s.scanorder asc
+
+)t  into result;    
+
+
+
+select Json_agg(row_to_json(t)) from (
+
+select s.id,s.category ,s.imagepath ,s.filename ,s.lable,0 as batchno
+
+,concat(s.documentpagegenid,'.pdf') as pdfimage
+
+,coalesce(db."CreatedDate", ab."CreatedDate") as batchdate from userdocument u  
+
+inner join scannedimage s  on s.id = u.documentid 
+
+inner join dbo."ApplicantBatch" ab on ab."ApplicantBatchGenId" = s.batchno
+
+inner join dbo."DocumentBatch" db on ab."DocumentBatchGenId" = db."DocumentBatchGenId" 
+
+where u.applicantgenid = _applicantid and u.applicationsequence < _applicantsequenceid)t into mappedidresult;
+
+
+
+
+
+RETURN jsonb_build_object('catagory',COALESCE(result,'[]'),'mappedids',COALESCE(mappedidresult,'[]'))::json;
+
+
+
+ END;
+
+ $function$
+

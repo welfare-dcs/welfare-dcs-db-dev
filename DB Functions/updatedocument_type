@@ -1,0 +1,119 @@
+CREATE OR REPLACE FUNCTION public.updatedocument_type(_caseid character varying)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+declare ns record;
+
+declare ns_inner record;
+
+declare isrecord_find Boolean;
+
+begin
+
+   
+
+   
+
+  FOR ns in 
+
+select  dp."DocumentGenId",case WHEN t.category like '%Application%' then 1
+
+     else
+
+     case WHEN t.category like '%Id%' then 2
+
+     else
+
+          case WHEN t.category like '%Index%' then 5
+
+        else
+
+           3
+
+       end
+
+    end
+
+end as category,ud.individualgenid from 
+
+(select *  from scannedimagelist  s2 
+
+where s2.applicationid = _caseid
+
+and s2.active is true
+
+and s2.category not in ('Residency','Others','Income'))t
+
+left join scannedimage s1 on s1.id = t.scannedimageuid
+
+left join userdocument ud on s1.id = ud.documentid
+
+left join dbo."DocumentPage" dp on dp."DocumentPageGenId" = s1.documentpagegenid
+
+
+
+loop 
+
+    -- PRINT ns.i * 2;
+
+    
+
+     update dbo."Document_DocumentType" set "DocumentTypeGenId" = ns.category where  "DocumentGenId"=ns."DocumentGenId";
+
+     --   
+
+    if ns.individualgenid is not null then 
+
+        isrecord_find := false;
+
+        FOR ns_inner in select ddt."DocumentDocumentTypeGenId",
+
+           ddt."DocumentGenId" , ddt."DocumentTypeGenId", ddt."IndividualGenId"  
+
+           from dbo."Document_DocumentType" ddt 
+
+            where ddt."DocumentGenId"= ns."DocumentGenId" 
+
+            and (ddt."IndividualGenId" = 0 or ddt."IndividualGenId" is null or  ddt."IndividualGenId" = ns.individualgenid)
+
+       loop 
+
+          isrecord_find := true;
+
+          update dbo."Document_DocumentType" set "IndividualGenId" = ns.individualgenid where "DocumentDocumentTypeGenId" = ns_inner."DocumentDocumentTypeGenId" and  "DocumentGenId"=ns."DocumentGenId";
+
+       end loop;
+
+      
+
+        if isrecord_find is false then 
+
+           --insert the record
+
+           INSERT INTO dbo."Document_DocumentType"("DocumentGenId", "DocumentTypeGenId", "IndividualGenId", 
+
+           "IncomeGenId","CreatedDate", "CreatedBy","DeletedBy") VALUES(ns."DocumentGenId", 2, ns.individualgenid,0, now(), 0,0);
+
+        
+
+        end if;
+
+          
+
+    end if;
+
+   
+
+   
+
+   
+
+  end loop;
+
+end;
+
+$function$
+

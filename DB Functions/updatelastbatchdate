@@ -1,0 +1,47 @@
+CREATE OR REPLACE FUNCTION public.updatelastbatchdate()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+DECLARE row RECORD;
+
+begin
+
+
+
+FOR row in select ab."ApplicantGenId",ab."ApplicationSequence",max(ab."CreatedDate") as "CreatedDate" from dbo."ApplicantBatch" ab 
+
+inner join  dbo."Application" a on a."ApplicantGenId" = ab."ApplicantGenId" and a."ApplicationSequence" = ab."ApplicationSequence" 
+
+where ab."CreatedDate" is not null
+
+group by ab."ApplicantGenId",ab."ApplicationSequence"
+
+order by ab."ApplicantGenId" asc
+
+
+
+  loop
+
+   
+
+     update dbo."Application" set "LastBatchDate" = row."CreatedDate" where "ApplicantGenId" = row."ApplicantGenId" and "ApplicationSequence" = row."ApplicationSequence";
+
+
+
+end loop;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

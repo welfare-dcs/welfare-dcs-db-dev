@@ -1,0 +1,121 @@
+CREATE OR REPLACE FUNCTION public.updatebatchid2()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+DECLARE row RECORD;
+
+begin
+
+   
+
+   --Step 1 : Check for Document to Migrate
+
+   /*
+
+   FOR row in select dp."DocumentPageGenId" from dbo."Application" a join dbo."Applicant" a2 on a."ApplicantGenId" = a2."ApplicantGenId" left join dbo."ApplicantBatch" ab on a."ApplicantGenId" = ab."ApplicantGenId" and a."ApplicationSequence" = ab."ApplicationSequence" left join dbo."Document" d on ab."ApplicantBatchGenId" = d."ApplicantBatchGenId" left join dbo."DocumentPage" dp on dp."DocumentGenId" = d."DocumentGenId" where a."ScanStatusGenId" in (2,4,5) and a."ApplicationSignedDate"::date >= '01-01-2018' and dp.conversion_status = 'MIGRATION_REQUIRED' group by dp."DocumentPageGenId" limit 100000 loop
+
+
+
+        UPDATE dbo."DocumentPage"  set conversion_status = 'MIGRATION_REQUIRED_1' ,retrive_status = 0 WHERE "DocumentPageGenId" in  (select "DocumentPageGenId" from dbo."DocumentPage" dp  where "DocumentPageGenId" in (row."DocumentPageGenId") and "DocumentPageGenId"  not in (select s.documentpagegenid from scannedimage s where s.documentpagegenid in (row."DocumentPageGenId")) and "DocumentBase64Image" is not null);
+
+   
+
+    END LOOP;
+
+    */
+
+   --Step 2 : Update the Batch Number in Scanned Images
+
+  /*
+
+   FOR row in select s.id,s.batchno,ab."ApplicantBatchGenId" from dbo."ApplicantBatch" ab inner join dbo."Document" d on ab."ApplicantBatchGenId"  = d."ApplicantBatchGenId" inner join dbo."DocumentPage" dp on dp."DocumentGenId" = d."DocumentGenId" inner join scannedimage s  on s.documentpagegenid  = dp."DocumentPageGenId" where s.batchno  != ab."ApplicantBatchGenId" group by s.id,s.batchno,ab."ApplicantBatchGenId" limit 1000 loop
+
+
+
+        update scannedimage set batchno = row."ApplicantBatchGenId" where id =row.id  and batchno= row.batchno;
+
+   
+
+    END LOOP;
+
+   */
+
+   -- Step 3 : Update the Batch Number in SCanned Image List
+
+
+
+   FOR row in select s.batchno,s2.id,s2.scannedimageuid,s2.batchno as s2batch from scannedimage s inner join scannedimagelist s2 on s.id = s2.scannedimageuid where s.batchno  != s2.batchno limit 1000 loop
+
+
+
+        update scannedimagelist set batchno = row.batchno where id = row.id and scannedimageuid =row.scannedimageuid and batchno  = row.s2batch;
+
+   
+
+    END LOOP;
+
+
+
+   -- Step 4 : Update reference in SCanned Image List
+
+/*   
+
+    FOR row in select * from (select s.*,s2.scannedimageuid from scannedimage s  left join scannedimagelist s2 on s.id = s2.scannedimageuid  where s.category is not null)t  where t.scannedimageuid is null limit 1000 loop
+
+
+
+      INSERT INTO public.scannedimagelist (id, scannedimageuid, applicationid, category, mimetype, imagepath, filename, lable, scanorder, active,ispermanent,batchno)VALUES(uuid_generate_v4(),row.id, row.applicationid, row.category, row.mimetype, row.imagepath, row.filename,row.lable, row.scanorder,true,false,row.batchno);
+
+   
+
+    END LOOP;
+
+  */  
+
+
+
+   /*
+
+   FOR row in select * from (select s.id,ddt."IndividualGenId",cast(split_part(s.applicationid,'-',1) as int4) as applicationid,
+
+   cast(split_part(s.applicationid,'-',2) as int4) as applicationseqid,
+
+   concat(i."IndividualLastName",' ',i."IndividualFirstName") as indiname,
+
+   u.documentid from scannedimage s  inner join dbo."DocumentPage" dp on s.documentpagegenid  = dp."DocumentPageGenId" 
+
+   inner join dbo."Document_DocumentType" ddt on ddt."DocumentGenId" = dp."DocumentGenId" and ddt."IndividualGenId" is not null 
+
+   and ddt."IndividualGenId" != 0 inner join dbo."Individual" i on i."IndividualGenId"  = ddt."IndividualGenId" 
+
+   left join userdocument u on u.documentid  = s.id where s.category is not null
+
+   group by s.id,ddt."IndividualGenId",s.applicationid,i."IndividualLastName",i."IndividualFirstName",u.documentid 
+
+   )t where t.documentid is null limit 1000 loop
+
+
+
+      INSERT INTO public.userdocument (documentid,individualgenid , applicantgenid,applicationsequence,individualname,createdby,createdon)
+
+      VALUES(row.id, row."IndividualGenId", row.applicationid,row.applicationseqid,row.indiname,0,now());
+
+   
+
+    END LOOP;
+
+   */
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

@@ -1,0 +1,57 @@
+CREATE OR REPLACE FUNCTION public.rpteligiblecountylst(_id integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+   /*
+
+   select Json_agg(row_to_json(t1)) from (
+
+SELECT A.countygenid,COUNT(B.countyid) as member 
+
+FROM public.eligiblecounty A 
+
+left join fssauser B  on A.county = B.countyid 
+
+where eligibleid = _id group by A.countygenid,B.countyid)t1 into result;
+
+*/
+
+   
+
+   select Json_agg(row_to_json(t1)) from (
+
+SELECT A."CountyGenId",B.usercount as member 
+
+FROM dbo."IntakeAgency_County" A  left join dbo."ref_County" B on A."CountyGenId" = B."CountyGenId"
+
+where a.eligibleofficeid = _id group by A."CountyGenId",B.usercount)t1 into result;
+
+   
+
+   
+
+RETURN COALESCE(json_build_array(json_build_object(
+
+'data',coalesce(result,'[]')
+
+)),'[]');
+
+
+
+ END;
+
+
+
+ $function$
+

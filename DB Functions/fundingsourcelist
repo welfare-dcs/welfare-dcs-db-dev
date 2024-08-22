@@ -1,0 +1,31 @@
+CREATE OR REPLACE FUNCTION public.fundingsourcelist()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select rfs."FundingSourceCode" as "lable",rfs."FundingSourceCode" as "id"  from dbo."ref_FundingSource" rfs 
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

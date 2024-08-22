@@ -1,0 +1,119 @@
+CREATE OR REPLACE FUNCTION public.cmd_releaseallreviewlocks(p_usergenid integer, p_reviewhistorygenid integer DEFAULT NULL::integer)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+
+declare
+
+   rows_count integer;
+
+BEGIN
+
+   -- SET NOCOUNT ON added to prevent extra result sets from
+
+   -- interfering with SELECT statements.
+
+
+
+   IF p_UserGenId IS NULL AND p_ReviewHistoryGenId IS NULL THEN
+
+      TRUNCATE table dbo."ReviewLock";
+
+
+
+      UPDATE dbo."ReviewHistory" SET
+
+         "EndDate" = NOW()
+
+      WHERE
+
+         "EndDate" IS NULL;
+
+    ELSE
+
+      drop table if exists tmpReviewHistoryGenId;
+
+      create temp table tmpReviewHistoryGenId as
+
+      SELECT
+
+         "ReviewHistoryGenId"
+
+--      INTO
+
+--         tmpReviewHistoryGenId
+
+      FROM
+
+         dbo."ReviewHistory"
+
+      WHERE
+
+         "UserGenId" = COALESCE(p_UserGenId, "UserGenId")
+
+--      and "EndDate" IS NULL
+
+      AND
+
+         "ReviewHistoryGenId" = COALESCE(p_ReviewHistoryGenId, "ReviewHistoryGenId");
+
+   
+
+      get diagnostics rows_count := ROW_COUNT;
+
+
+
+      IF rows_count > 0 THEN
+
+         DELETE
+
+         FROM
+
+            dbo."ReviewLock" 
+
+         WHERE
+
+            "ReviewHistoryGenId" IN (
+
+               SELECT
+
+                  "ReviewHistoryGenId"
+
+               FROM
+
+                  tmpReviewHistoryGenId
+
+            );
+
+
+
+         UPDATE dbo."ReviewHistory" rh SET
+
+            "EndDate" = NOW()
+
+         WHERE
+
+            rh."ReviewHistoryGenId" IN (
+
+               SELECT
+
+                  "ReviewHistoryGenId"
+
+               FROM
+
+                  tmpReviewHistoryGenId
+
+            ) 
+
+            and "EndDate" IS NULL
+
+            ;
+
+      END IF;
+
+   END IF;
+
+END;
+
+$function$
+

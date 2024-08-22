@@ -1,0 +1,85 @@
+CREATE OR REPLACE FUNCTION public.eligibilityerrordefinitionslist()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+mi."Name" 
+
+, mi."MonitoringItemGenId" 
+
+, mi."Description"
+
+, mi."EffectiveDate" 
+
+, mi."RetireDate" 
+
+, mi."OrderNum" 
+
+, mi."MonitoringItemGroupGenId" 
+
+, case when (mi."RetireDate" is null or mi."RetireDate"::date >= current_date) then false else true end as "expiredindicator"
+
+,(
+
+select Json_agg(row_to_json(t1)) from (
+
+select concat(et.errornumber,'.',et.sort) as "error_item"
+
+, et."Error" as "error"
+
+, et."ErrorTypeGenId"
+
+, et."errorCategoryGenId" 
+
+, rec."ErrorCategoryDescription" 
+
+from public."ErrorType" et 
+
+join dbo."ref_ErrorCategory" rec on et."errorCategoryGenId" = rec."ErrorCategoryGenId" 
+
+where et."MonitoringItemGenId" = mi."MonitoringItemGenId" 
+
+and et."DeleteDate" is null
+
+order by et.sort asc
+
+)t1
+
+) as "errortype"
+
+from dbo."MonitoringItem" mi 
+
+where 
+
+mi."MonitoringItemGroupGenId" = 1
+
+--and (mi."RetireDate" is null or mi."RetireDate"::date >= current_date)
+
+order by mi."OrderNum" asc
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

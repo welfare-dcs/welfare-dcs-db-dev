@@ -1,0 +1,19 @@
+CREATE OR REPLACE FUNCTION public.updateapplicationlastscandate()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+
+BEGIN
+
+
+
+   UPDATE dbo."Application" SET  "LastBatchDate"= now() WHERE "ApplicantGenId"=NEW."ApplicantGenId" AND "ApplicationSequence"=NEW."ApplicationSequence";
+
+
+
+RETURN NEW;
+
+END;
+
+$function$
+

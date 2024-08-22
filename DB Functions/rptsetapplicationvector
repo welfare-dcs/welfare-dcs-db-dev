@@ -1,0 +1,33 @@
+CREATE OR REPLACE FUNCTION public.rptsetapplicationvector()
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE _row RECORD;
+
+
+
+
+
+BEGIN
+
+
+
+
+
+    FOR _row IN SELECT * FROM dbo."Application" LOOP
+
+
+
+   update dbo."Application" set searchvector = to_tsvector('simple',_row.searchjson) where "ApplicantGenId" = _row."ApplicantGenId" and "ApplicationSequence" = _row."ApplicationSequence";
+
+
+
+    END LOOP;
+
+END;
+
+$function$
+

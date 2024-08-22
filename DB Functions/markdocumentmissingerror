@@ -1,0 +1,85 @@
+CREATE OR REPLACE FUNCTION public.markdocumentmissingerror(_monitoringsequencegenid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+DECLARE result json;
+
+begin
+
+
+
+INSERT INTO dbo."Error" ("MonitoringSequenceGenId", "ErrorTypeGenId","Comment",
+
+        "FixDate", "ApprovedInd", "StateApprovedInd",
+
+        "RemovedByPolicy", "CannotBeCorrected", "CreateDate", "CreatedBy", "ErrorCategoryGenId","OcrMarked",errorstatus)
+
+select  
+
+_monitoringsequencegenid
+
+, et."ErrorTypeGenId" 
+
+, 'Error tagged by QASE'
+
+, null
+
+, null
+
+, null
+
+, null
+
+, null
+
+, current_timestamp 
+
+, null
+
+, et."errorCategoryGenId" 
+
+, null
+
+, true
+
+from public."ErrorType" et 
+
+join dbo."MonitoringItem" mi on et."MonitoringItemGenId" = mi."MonitoringItemGenId" 
+
+where mi."MonitoringItemGroupGenId" = 1 
+
+and  (mi."RetireDate" is null or mi."RetireDate" AT time zone 'EST' >= current_timestamp AT time zone 'EST')
+
+and case when (select count(*) from dbo."MonitoringSequence" ms
+
+join dbo."Family" f on ms."ApplicantGenId" = f."ApplicantGenId"  and ms."ApplicationSequence" = f."ApplicationSequence" 
+
+where ms."MonitoringSequenceGenId" = _monitoringsequencegenid and f."PriorityGenId" in (1)
+
+) > 0 then 
+
+mi."MonitoringItemGenId" in (1,26,8,25,9,10,17,24,14,16)
+
+else 
+
+mi."MonitoringItemGenId" in (1,26,8,25,10,17,24,14,16)
+
+end
+
+and et.sort = 1
+
+and et."DeleteDate" is null
+
+order by mi."OrderNum"
+
+;
+
+        
+
+RETURN COALESCE(result,'[]');
+
+end;
+
+$function$
+

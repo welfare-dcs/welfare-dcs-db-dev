@@ -1,0 +1,149 @@
+CREATE OR REPLACE FUNCTION public.removecaseinfo(_applicationid character varying, _applicantgenid integer, _applicationsequenceid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+DECLARE result json;
+
+begin
+
+
+
+   --character varying _barcode = concat
+
+-- Remove Index
+
+delete from dbo."ScannedDocsIndex" sdi where "BarCode" like concat(_applicationid,'%');
+
+   
+
+-- Error Table 
+
+delete from dbo."Error" er where er."MonitoringSequenceGenId" in (select "MonitoringSequenceGenId" from dbo."MonitoringSequence" ms where ms."ApplicantGenId" = _applicantgenid and ms."ApplicationSequence" = _applicationsequenceid);
+
+
+
+-- Monitor Squence Table
+
+delete  from dbo."MonitoringSequence" ms where ms."ApplicantGenId" = _applicantgenid and ms."ApplicationSequence" = _applicationsequenceid;
+
+
+
+-- User Document
+
+delete from userdocument u2 where u2.documentid in (select s2.id from scannedimage s2  where s2.applicationid = _applicationid);
+
+
+
+--Scanned Image 
+
+delete from scannedimagelist s3 where  s3.applicationid = _applicationid;
+
+
+
+--Scanned Image list 
+
+delete  from scannedimage s2  where s2.applicationid = _applicationid;
+
+
+
+
+
+-- Document page 
+
+
+
+delete from dbo."DocumentPage" dp2 where dp2."DocumentPageGenId" in (
+
+select  dp."DocumentPageGenId"
+
+from dbo."ApplicantBatch" ab 
+
+join dbo."Document" d on ab."ApplicantBatchGenId" = d."ApplicantBatchGenId" 
+
+join dbo."DocumentPage" dp on d."DocumentGenId" = dp."DocumentGenId" 
+
+where ab."ApplicantGenId" = _applicantgenid
+
+and ab."ApplicationSequence" = _applicationsequenceid);
+
+
+
+-- Document type 
+
+delete from dbo."Document_DocumentType" dp2 where dp2."DocumentDocumentTypeGenId" in (
+
+select 
+
+ddt."DocumentDocumentTypeGenId"
+
+from dbo."ApplicantBatch" ab 
+
+join dbo."Document" d on ab."ApplicantBatchGenId" = d."ApplicantBatchGenId" 
+
+join dbo."DocumentPage" dp on d."DocumentGenId" = dp."DocumentGenId" 
+
+join dbo."DocumentBatch" db on ab."DocumentBatchGenId" = db."DocumentBatchGenId" 
+
+join dbo."Document_DocumentType" ddt on d."DocumentGenId" = ddt."DocumentGenId" 
+
+where ab."ApplicantGenId" = _applicantgenid
+
+and ab."ApplicationSequence" = _applicationsequenceid);
+
+
+
+delete from dbo."Document_DocumentType" dp2 where dp2."IndividualGenId" in (
+
+select f2."IndividualGenId" from dbo."Family" f2 where f2."ApplicantGenId" = _applicantgenid and f2."ApplicationSequence" = _applicationsequenceid);
+
+
+
+
+
+-- Document
+
+
+
+delete  from dbo."Document" d2 where d2."DocumentGenId" in (
+
+select 
+
+d."DocumentGenId"
+
+from dbo."ApplicantBatch" ab 
+
+join dbo."Document" d on ab."ApplicantBatchGenId" = d."ApplicantBatchGenId" 
+
+where ab."ApplicantGenId" = _applicantgenid
+
+and ab."ApplicationSequence" = _applicationsequenceid);
+
+
+
+-- Application Batch
+
+
+
+delete from dbo."ApplicantBatch" ab where ab."ApplicantGenId" = _applicantgenid
+
+and ab."ApplicationSequence" = _applicationsequenceid;
+
+
+
+update dbo."Application" set "ApplicantStatusGenId"=1,"ScanStatusGenId" =1,"ScanCaseTypeGenId" = 1,"ApplicationSignedDate"=current_date - 2  where "ApplicantGenId" =_applicantgenid and "ApplicationSequence" =_applicationsequenceid;
+
+
+
+ --update dbo."Application" set "ApplicantStatusGenId"=1,"ScanStatusGenId" =2,"ScanCaseTypeGenId" = 1 where "ApplicantGenId" =_applicantgenid and "ApplicationSequence" =_applicationsequenceid;
+
+
+
+
+
+RETURN COALESCE(result,'[]');
+
+end;
+
+$function$
+

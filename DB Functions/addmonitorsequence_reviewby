@@ -1,0 +1,205 @@
+CREATE OR REPLACE FUNCTION public.addmonitorsequence_reviewby(_applicant_gen_id integer, _applicantion_sequence integer, _monitoring_sequence_genid integer, _review_by integer)
+ RETURNS text
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE 
+
+
+
+userroles json;
+
+userrole uuid;
+
+userfirstname character varying;
+
+userlastname character varying ;
+
+
+
+BEGIN 
+
+   
+
+select * from public.mytaskuserrole() into userroles;
+
+
+
+select f."roleid", f."firstname", f."lastname" into userrole, userfirstname, userlastname from public."fssauser" f where f."id" = _review_by;
+
+
+
+if (userrole = (userroles->>'eligibilityOfficeUUID')::uuid) then 
+
+
+
+update public.monitoringsequence_reviewby set user_role = 'eu', user_first_name = userfirstname, user_last_name = userlastname where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by and user_role is null ;
+
+
+
+update public.monitoringsequence_reviewby set last_review_by_indicator = null where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by;
+
+
+
+update public.monitoringsequence_reviewby set last_review_by_indicator  = true where id in (
+
+select id from public.monitoringsequence_reviewby where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by order by created_at desc limit 1
+
+);
+
+
+
+update public.monitoringsequence_reviewby set last_elibility_review_by_indicator = null where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and user_role in ('eu', 'eom');
+
+
+
+update public.monitoringsequence_reviewby set last_elibility_review_by_indicator = true where id in (
+
+select id from public.monitoringsequence_reviewby where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and user_role in ('eu', 'eom') order by created_at desc limit 1
+
+);
+
+
+
+elseif (userrole = (userroles->>'eligibilityOfficeManagerUUID')::uuid) then 
+
+
+
+update public.monitoringsequence_reviewby set user_role = 'eom', user_first_name = userfirstname, user_last_name = userlastname where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by and user_role is null ;
+
+
+
+update public.monitoringsequence_reviewby set last_review_by_indicator = null where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by;
+
+
+
+update public.monitoringsequence_reviewby set last_review_by_indicator  = true where id in (
+
+select id from public.monitoringsequence_reviewby where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by order by created_at desc limit 1
+
+);
+
+
+
+update public.monitoringsequence_reviewby set last_elibility_review_by_indicator = null where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and user_role in ('eu', 'eom');
+
+
+
+update public.monitoringsequence_reviewby set last_elibility_review_by_indicator = true where id in (
+
+select id from public.monitoringsequence_reviewby where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and user_role in ('eu', 'eom') order by created_at desc limit 1
+
+);
+
+
+
+elseif (userrole = (userroles->>'monitorUUID')::uuid) then 
+
+
+
+update public.monitoringsequence_reviewby set user_role = 'mu', user_first_name = userfirstname, user_last_name = userlastname where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by and user_role is null ;
+
+
+
+update public.monitoringsequence_reviewby set last_review_by_indicator = null where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by;
+
+
+
+update public.monitoringsequence_reviewby set last_review_by_indicator  = true where id in (
+
+select id from public.monitoringsequence_reviewby where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by order by created_at desc limit 1
+
+);
+
+
+
+update public.monitoringsequence_reviewby set last_monitor_review_by_indicator  = null where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and user_role in ('mu', 'mm');
+
+
+
+update public.monitoringsequence_reviewby set last_monitor_review_by_indicator = true where id in (
+
+select id from public.monitoringsequence_reviewby where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and user_role in ('mu', 'mm') order by created_at desc limit 1
+
+);
+
+
+
+elseif (userrole = (userroles->>'monitoManagerUUID')::uuid) then 
+
+
+
+update public.monitoringsequence_reviewby set user_role = 'mm', user_first_name = userfirstname, user_last_name = userlastname where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by and user_role is null ;
+
+
+
+update public.monitoringsequence_reviewby set last_review_by_indicator = null where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by;
+
+
+
+update public.monitoringsequence_reviewby set last_review_by_indicator  = true where id in (
+
+select id from public.monitoringsequence_reviewby where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by order by created_at desc limit 1
+
+);
+
+
+
+update public.monitoringsequence_reviewby set last_monitor_review_by_indicator  = null where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and user_role in ('mu', 'mm');
+
+
+
+update public.monitoringsequence_reviewby set last_monitor_review_by_indicator = true where id in (
+
+select id from public.monitoringsequence_reviewby where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and user_role in ('mu', 'mm') order by created_at desc limit 1
+
+);
+
+
+
+elseif (userrole = (userroles->>'policyConsultantUUID')::uuid) then 
+
+
+
+update public.monitoringsequence_reviewby set user_role = 'pc', user_first_name = userfirstname, user_last_name = userlastname where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by and user_role is null ;
+
+
+
+elseif (userrole = (userroles->>'superuserUUID')::uuid) then 
+
+
+
+update public.monitoringsequence_reviewby set user_role = 'su', user_first_name = userfirstname, user_last_name = userlastname where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by and user_role is null ;
+
+
+
+elseif (userrole = (userroles->>'readOnlyUUID')::uuid) then 
+
+
+
+update public.monitoringsequence_reviewby set user_role = 'rou', user_first_name = userfirstname, user_last_name = userlastname where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by and user_role is null ;
+
+
+
+elseif (userrole = (userroles->>'scanOnlyUUID')::uuid) then 
+
+
+
+update public.monitoringsequence_reviewby set user_role = 'sou', user_first_name = userfirstname, user_last_name = userlastname where "ApplicantGenId" = _applicant_gen_id and "ApplicationSequence" = _applicantion_sequence and "MonitoringSequenceGenId" = _monitoring_sequence_genid and review_by = _review_by and user_role is null ;
+
+
+
+end if;
+
+   
+
+   RETURN 'SUCCESS';
+
+
+
+end;
+
+ $function$
+

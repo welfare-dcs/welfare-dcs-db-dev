@@ -1,0 +1,223 @@
+CREATE OR REPLACE FUNCTION public.eligibilityfamilydetails(_caseid character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare family_details json;
+
+begin
+
+
+
+select Json_agg(row_to_json(t)) from (
+
+select 
+
+t1.*
+
+from 
+
+(select i."IndividualFirstName" ,i."IndividualLastName" ,f."IndividualGenId",
+
+i."DateOfBirth" ,i."GenderCode" ,i."RIDNumber" ,f."MedicaidInd" ,
+
+f."ApplicantRelationshipGenId",i."CitizenInd",u.relationshiptypedesc as "relationshipdetails",
+
+CASE WHEN sil.imagepath is not null  THEN 'found'
+
+     ELSE null
+
+end as filepath
+
+/*CASE WHEN sil.imagepath is not null  THEN CONCAT('https://d2i5q3iaecwk95.cloudfront.net/',sil.imagepath,'/',sil.filename)
+
+     ELSE null
+
+end as filepath*/
+
+, rsn."ServiceNeedDescription" as "serviceneed"
+
+,(
+
+select 
+
+sum(
+
+case 
+
+when fi."IncomeFrequencyCodeDescription" = 'Annual' then fi."Amount"::float / 12
+
+when fi."IncomeFrequencyCodeDescription" = 'Quarterly' then fi."Amount"::float / 3
+
+when fi."IncomeFrequencyCodeDescription" = 'Monthly' then fi."Amount"::float * 1
+
+when fi."IncomeFrequencyCodeDescription" = 'Semi-Monthly' then fi."Amount"::float * 2
+
+when fi."IncomeFrequencyCodeDescription" = 'Weekly' then fi."Amount"::float * 4
+
+when fi."IncomeFrequencyCodeDescription" = 'Bi-Weekly' then fi."Amount"::float * 2
+
+else fi."Amount"::float * 1
+
+end
+
+)
+
+from dbo."FamilyIncome" fi 
+
+join public.ref_incomesource ri on lower(fi."IncomeSourceDescription") = lower(ri.incomesourcedesc) 
+
+where ri.eligible = 1
+
+and f."ApplicantGenId" = fi."ApplicantGenId"
+
+and f."ApplicationSequence" = fi."ApplicationSequence" 
+
+and f."IndividualGenId" = fi."IndividualGenId" 
+
+and fi."DeletedDate" is null
+
+)
+
+as "grossincome"
+
+, 
+
+(
+
+select string_agg(fi."IncomeSourceDescription" ,',') from dbo."FamilyIncome" fi 
+
+join public.ref_incomesource ri on lower(fi."IncomeSourceDescription") = lower(ri.incomesourcedesc) 
+
+where 
+
+--ri.eligible = 1
+
+ f."ApplicantGenId" = fi."ApplicantGenId"
+
+and f."ApplicationSequence" = fi."ApplicationSequence" 
+
+and f."IndividualGenId" = fi."IndividualGenId" 
+
+and fi."DeletedDate" is null
+
+)
+
+as "incomesource"
+
+, case when f."PriorityGenId" = 5 then true else false end as "specialneed"
+
+, case when i."StatusDescription" = 'Active Receiving Service' or f."IndividualStatusDescription" = 'Active (Receive Service)' then true else false end as "childneedservice"
+
+, case when f."ApplicantRelationshipGenId" in (1,4,5,6,7,19,20) then true else false end as "adultindicator"
+
+, max(t."BeginDate") as "date_transitional_care_begins"
+
+, max(t."EndDate") as "date_transitional_care_ends"
+
+, case when f."ApplicantRelationshipGenId" in (1) then true else false end as "applicant_indicator"
+
+, case when f."ApplicantRelationshipGenId" in (4,5,6,7,20) then true else false end as "coapplicant_indicator"
+
+--, fi."IncomeFrequencyCodeDescription" 
+
+, u.sortorder 
+
+, f."HasEducationProgram" as "HasEducationProgram"
+
+from dbo."Family" f
+
+left join userdocument ud on ud.individualgenid = f."IndividualGenId"
+
+left join scannedimage sil  on ud.documentid = sil.id
+
+left join dbo."Individual" i on f."IndividualGenId" = i."IndividualGenId"
+
+left join public."TRANSITIONALCARES" t on i."IndividualGenId" = t."IndividualGenId" 
+
+left join public.userrelationtypes u  on f."ApplicantRelationshipGenId" = u.refrelationshiptypegenid
+
+left join dbo."ref_ServiceNeed" rsn on f."ServiceNeedGenId" = rsn."ServiceNeedGenId"
+
+where  concat(f."ApplicantGenId",concat('-',f."ApplicationSequence"))  = _caseid and f."IndividualStatusDescription" not in ('Not Set','Removed')
+
+group by i."IndividualFirstName" ,i."IndividualLastName" ,f."IndividualGenId",
+
+i."DateOfBirth" ,i."GenderCode" ,i."RIDNumber" ,f."MedicaidInd" ,
+
+f."ApplicantRelationshipGenId",i."CitizenInd",u.relationshiptypedesc,filepath,
+
+rsn."ServiceNeedDescription",f."PriorityGenId",
+
+i."StatusDescription",sil.filename,u.sortorder,adultindicator,f."IndividualStatusDescription",f."ApplicantGenId",f."ApplicationSequence",f."IndividualGenId","HasEducationProgram"
+
+order by u.sortorder asc)t1 
+
+group by "IndividualFirstName",
+
+"IndividualLastName",
+
+"IndividualGenId",
+
+"DateOfBirth",
+
+"GenderCode",
+
+"RIDNumber",
+
+"filepath",
+
+"MedicaidInd",
+
+"ApplicantRelationshipGenId",
+
+"CitizenInd",
+
+"relationshipdetails",
+
+"serviceneed",
+
+"grossincome",
+
+"incomesource",
+
+"specialneed",
+
+"childneedservice",
+
+"adultindicator"
+
+, "date_transitional_care_begins" 
+
+, "date_transitional_care_ends" 
+
+, "applicant_indicator"
+
+,"coapplicant_indicator"
+
+, "sortorder","HasEducationProgram"
+
+--,"IncomeFrequencyCodeDescription"
+
+order by sortorder asc
+
+)t into family_details;
+
+
+
+select row_to_json(t) from (select COALESCE(family_details,'[]') as "family_details")t  into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

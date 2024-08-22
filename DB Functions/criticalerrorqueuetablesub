@@ -1,0 +1,39 @@
+CREATE OR REPLACE FUNCTION public.criticalerrorqueuetablesub(_errorcode integer, _countycode integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select e."Comment" as "error_type",iac."IntakeAgencyCode",e."CreateDate" as "error_date" 
+
+from dbo."Error" e ,dbo."IntakeAgency_County" iac 
+
+where 
+
+e."ErrorGenId" = _errorcode 
+
+and iac."CountyGenId" = _countycode
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

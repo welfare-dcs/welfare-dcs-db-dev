@@ -1,0 +1,27 @@
+CREATE OR REPLACE FUNCTION public.updateeligibilityofficecaserate(_id integer, _caserate double precision)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+update public.teligibilityoffice set case_rate = _caserate where id = _id;
+
+   
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

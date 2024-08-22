@@ -1,0 +1,185 @@
+CREATE OR REPLACE FUNCTION public.getreviewlock(p_applicantgenid integer, p_applicationsequence integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE 
+
+   v_ReviewHistoryGenId   INT; 
+
+   v_GotLock BOOLEAN; 
+
+   v_ApplicantGenId int; 
+
+   v_AppealDate timestamp; 
+
+   v_AppealAcceptDate timestamp; 
+
+   v_AppealDenyDate timestamp;
+
+   v_ApprovedInd boolean; 
+
+   v_ApplicationSequence int;
+
+   v_MonitoringSequenceGenId int;
+
+   rows_count int;
+
+   results json;
+
+   
+
+BEGIN
+
+   v_ApplicantGenId := NULL;
+
+   v_GotLock := 0;
+
+
+
+   --RELEASE ANY PREVIOUS LOCKS
+
+   --perform CMD_ReleaseAllReviewLocks(p_UserGenId);
+
+
+
+   
+
+   SELECT a."AppealDate", "ApplicantGenId", ms."ApplicationSequence","AppealAcceptDate", "AppealDenyDate", ms."ApprovedInd", ms."MonitoringSequenceGenId" 
+
+    INTO v_AppealDate, v_ApplicantGenId, v_ApplicationSequence, v_AppealAcceptDate, v_AppealDenyDate, v_ApprovedInd, v_MonitoringSequenceGenId
+
+   from dbo."MonitoringSequence" ms 
+
+   LEFT OUTER JOIN dbo."Appeals" a ON ms."MonitoringSequenceGenId" = a."MonitoringSequenceGenId"
+
+   WHERE ms."ApplicantGenId" = p_applicantgenid and ms."ApplicationSequence" = p_applicationsequence
+
+   order by ms."CreatedDate" desc limit 1;
+
+      
+
+   get diagnostics rows_count := ROW_COUNT;
+
+   
+
+   IF rows_count > 0 
+
+   THEN 
+
+      --begin;
+
+      --If any sequences are available create a review history row 
+
+      --   and link it to the first Monitoring Sequence
+
+      IF v_ApplicantGenId IS NOT NULL
+
+      THEN 
+
+         
+
+         --v_ReviewHistoryGenId := SCOPE_IDENTITY();
+
+
+
+         IF (SELECT COUNT(*)
+
+            FROM dbo."ReviewLock"
+
+            WHERE v_ApplicantGenId = "ApplicantGenId") > 0
+
+         THEN 
+
+               select "ReviewHistoryGenId"
+
+               into v_ReviewHistoryGenId
+
+               from dbo."ReviewLock" rl
+
+               where v_ApplicantGenId = "ApplicantGenId";
+
+               v_GotLock := 1;
+
+         else
+
+         
+
+            INSERT into dbo."ReviewHistory" ("BeginDate", "UserGenId", "MonitoringSequenceGenId") 
+
+            VALUES (NOW(), -1, v_MonitoringSequenceGenId) returning "ReviewHistoryGenId" into v_ReviewHistoryGenId;
+
+
+
+            INSERT INTO dbo."ReviewLock" ("ApplicantGenId", "ReviewHistoryGenId", "MonitoringSequenceGenId", "AquireDate") 
+
+            SELECT ms."ApplicantGenId", v_ReviewHistoryGenId, ms."MonitoringSequenceGenId", NOW()
+
+            FROM dbo."MonitoringSequence" ms
+
+            WHERE ms."MonitoringSequenceGenId" = v_MonitoringSequenceGenId;
+
+
+
+            v_GotLock := 0;
+
+         END IF;
+
+
+
+--         INSERT INTO dbo."ReviewHistory_ApplicantBatch" ("ReviewHistorygenId", "ApplicantBatchGenId") 
+
+--         SELECT v_ReviewHistoryGenId, "ApplicantBatchGenId"
+
+--         FROM dbo."MonitoringSequence" ms 
+
+--         join dbo."ApplicantBatch" ab ON ms."ApplicantGenId" = ab."ApplicantGenId"
+
+--                              AND ms."ApplicationSequence" = ab."ApplicationSequence"
+
+--         WHERE ms."MonitoringSequenceGenId" = v_MonitoringSequenceGenId;
+
+
+
+      END IF; 
+
+
+
+      --commit;   
+
+
+
+      IF v_ReviewHistoryGenId IS NOT NULL 
+
+      then
+
+         select Json_agg(row_to_json(t1)) from (
+
+         SELECT v_ReviewHistoryGenId as "ReviewHistoryGenId",
+
+         v_GotLock as "HasLock", TO_CHAR (v_AppealDate, 'MM/DD/YYYY') as "AppealDate",
+
+         TO_CHAR (v_AppealAcceptDate, 'MM/DD/YYYY') as "AppealAcceptDate", 
+
+         TO_CHAR (v_AppealDenyDate, 'MM/DD/YYYY') as "AppealDenyDate", v_ApprovedInd as "ApprovedInd",
+
+         v_ApplicantGenId as "ApplicantGenId", v_ApplicationSequence as "ApplicationSequence"
+
+         )t1 into results;
+
+      
+
+      END IF;
+
+   END IF;
+
+RETURN COALESCE(results,'[]');
+
+   
+
+END;
+
+$function$
+

@@ -1,0 +1,225 @@
+CREATE OR REPLACE FUNCTION public.cmd_repaymentletter(_intakeagencycode character varying)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+declare Counter int4;
+
+declare RepaymentRequestGenId int4;
+
+declare temp_value character varying;
+
+
+
+begin
+
+   Counter:= 1;
+
+
+
+CREATE TEMP TABLE IF NOT EXISTS temp_table(
+
+"GenId" SERIAL PRIMARY KEY,
+
+"CaseNumber" varchar(255),
+
+"Amount" int4,
+
+"FixDate" timestamp,
+
+"RepaymentRequestGenId" int4,
+
+"ApplicantName" varchar(255),
+
+"CountyName" varchar(255),
+
+"IntakeAgencyCode" varchar(255),
+
+"Name" varchar(255),
+
+"MailingAddress" varchar(255),
+
+"MailingCity" varchar(255),
+
+"MailingZip" varchar(255),
+
+"ContactName" varchar(255),
+
+"Error" varchar(255)
+
+);
+
+
+
+create temp table if not exists TempErrors(
+
+"GenId" SERIAL PRIMARY KEY,
+
+"MonitoringItemGenId" int4,
+
+"RepaymentRequestGenId" int4
+
+);
+
+
+
+insert into temp_table(
+
+"CaseNumber",
+
+"Amount",
+
+"FixDate",
+
+"RepaymentRequestGenId",
+
+"ApplicantName",
+
+"CountyName",
+
+"IntakeAgencyCode",
+
+"Name",
+
+"MailingAddress",
+
+"MailingCity",
+
+"MailingZip",
+
+"ContactName")
+
+select 
+
+distinct concat(rr."ApplicantGenId",'-',rr."ApplicationSequence") as "CaseNumber"
+
+, rr."Amount" 
+
+, e."FixDate" 
+
+, rr."RepaymentRequestGenId" 
+
+, concat(a."ApplicantLastName",', ',a."ApplicantFirstName") as "ApplicantName"
+
+, rc."CountyName" 
+
+, iac."IntakeAgencyCode" 
+
+, t.eligibilityofficename as "Name"
+
+, t.mailingaddress1 as "MailingAddress"
+
+, t.mailingcity as "MailingCity"
+
+, t.mailingzip as "MailingZip"
+
+, t.agencymanager as "ContactName"
+
+from dbo."RepaymentRequest" rr 
+
+left join dbo."RepaymentRequest_MonitoringItem" rrmi on rr."RepaymentRequestGenId" = rrmi."RepaymentRequestGenId" 
+
+left join dbo."MonitoringSequence" ms on rr."ApplicantGenId" = ms."ApplicantGenId" 
+
+join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId" 
+
+join dbo."Applicant" a on rr."ApplicantGenId" = a."ApplicantGenId" 
+
+join dbo."Address" a2 on a."ApplicantGenId" = a2."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence" 
+
+join dbo."ref_County" rc on a2."CountyGenId" = rc."CountyGenId" 
+
+join dbo."IntakeAgency_County" iac on rc."CountyGenId" = iac."CountyGenId" 
+
+join public.teligibilityoffice t on iac.eligibleofficeid = t.id
+
+where iac."IntakeAgencyCode" = _IntakeAgencyCode
+
+and e."FixDate" is null
+
+and rr."Amount" > 0
+
+and NOT EXISTS (
+
+select * from dbo."RepaymentLetterHistory" rlh where rr."RepaymentRequestGenId" = rlh."RepaymentRequestGenId" 
+
+);
+
+   
+
+insert into TempErrors(
+
+"MonitoringItemGenId" ,
+
+"RepaymentRequestGenId" 
+
+)
+
+select 
+
+rm."MonitoringItemGenId" 
+
+,t."RepaymentRequestGenId" 
+
+from temp_table t
+
+join dbo."RepaymentRequest_MonitoringItem" rm on t."RepaymentRequestGenId" = rm."RepaymentRequestGenId" 
+
+;
+
+
+
+while Counter < (select max("GenId") from TempErrors) loop
+
+   update temp_table set "Error" = (
+
+   select concat(coalesce("Error", ''),' ' ,mi."Name") as "Error" from temp_table t 
+
+   join TempErrors te on t."RepaymentRequestGenId" = te."RepaymentRequestGenId"
+
+   join dbo."MonitoringItem" mi on te."MonitoringItemGenId" = mi."MonitoringItemGenId" 
+
+--   where te."GenId" = Counter
+
+   limit 1
+
+   )
+
+   where "GenId" = Counter;
+
+   
+
+   Counter:= Counter + 1;
+
+end loop;
+
+
+
+Counter:= 1;
+
+
+
+while Counter < (select max("GenId") from temp_table) loop
+
+   select t."RepaymentRequestGenId" from temp_table t where t."GenId" = Counter into RepaymentRequestGenId;
+
+   
+
+   SELECT public.cmd_logrepaymentprint(RepaymentRequestGenId,19) into temp_value;
+
+   
+
+   RepaymentRequestGenId:= null;
+
+   Counter:= Counter + 1;
+
+end loop;
+
+
+
+ END
+
+ $function$
+

@@ -1,0 +1,43 @@
+CREATE OR REPLACE FUNCTION public.step6()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+DECLARE row RECORD;
+
+begin
+
+
+
+   FOR row in select  concat(md."C4_GEOGRAPHY",md."C5_LINE_OF_BUSINESS",mg."Method") as "GEOGRAPH_LN_OF_BSINES",
+
+   sum(md."C7_DATA") as "TOTAL_DRIVER_DATA" from  process.mst_data md inner join "source".mst_glcode mg on mg."GL Account" = md."C1_ACCOUNT" and mg."Methodology" = 'CBSL-Sales' and mg."Method" = '2'
+
+where md."CPSL_SALES" = 'N' 
+
+group by md."C1_ACCOUNT", concat(md."C4_GEOGRAPHY",md."C5_LINE_OF_BUSINESS",mg."Method")  loop 
+
+   
+
+   INSERT INTO process.mst_branch_c7data("GEOGRAPH_LN_OF_BSINES",
+
+"TOTAL_DRIVER_DATA")VALUES(concat(row."GEOGRAPH_LN_OF_BSINES"),row."TOTAL_DRIVER_DATA");
+
+   
+
+end loop;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

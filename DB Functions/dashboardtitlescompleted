@@ -1,0 +1,93 @@
+CREATE OR REPLACE FUNCTION public.dashboardtitlescompleted(_intakeagency character varying, _county character varying, _userid character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+declare completed int4;
+
+
+
+begin
+
+
+
+select
+
+count(t)
+
+from
+
+(
+
+select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName"),' ',initcap(a."ApplicantLastName")) as "applicantname"
+
+, a2."ApplicationSignedDate" as "applicationdate"
+
+, a2."ApplicationCompleteDate" as "completeddate"
+
+, teo.description as "eligibilityoffice"
+
+, rp."PriorityDescription" as "casepriority"
+
+, ms."ReviewedDate" as "reviewed_date"
+
+, ms."ReviewedBy"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId" and a2."ApplicationSignedDate"::date between current_date - 730 and current_date and (a2."IsLimitedEligibility" is true or (a2."ScanStatusGenId" in (3,9) or a2."TerminationDate" is not null))
+
+left join dbo."MonitoringSequence" ms on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+inner join dbo."Family" f on a2."ApplicantGenId" = f."ApplicantGenId" and a2."ApplicationSequence" = f."ApplicationSequence" and f."ApplicantInd" is true
+
+left join dbo."ref_Priority" rp on f."PriorityGenId" = rp."PriorityGenId"
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join dbo."ref_ScanStatus" rss on a2."ScanStatusGenId" = rss."ScanStatusGenId"
+
+left join public.case_by_scanstatus cbs on  cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+where
+
+case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+group by a."ApplicantFirstName",a."ApplicantLastName",a2."ApplicationSignedDate",
+
+a2."ApplicationCompleteDate",teo.description,rp."PriorityDescription",
+
+ms."ReviewedDate", a2."ApplicantGenId",a2."ApplicationSequence",
+
+ms."ReviewedBy"
+
+)t
+
+into completed;
+
+
+
+RETURN json_build_object('completed',coalesce(completed,0));
+
+
+
+ END;
+
+ $function$
+

@@ -1,0 +1,51 @@
+CREATE OR REPLACE FUNCTION public.dashboardtitlesinprogress(_intakeagency character varying, _county character varying, _userid character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+declare inprogress int4;
+
+
+
+begin
+
+
+
+select count(a.*) from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId" and a2."ScanStatusGenId" not in (3,9) and a2."ApplicationSignedDate"::date between current_date - 730 and current_date
+
+join dbo."MonitoringSequence" ms on a2."ApplicantGenId" = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence" and ms."ReviewedBy" = any(_userid ::int[])
+
+join dbo."Address" a3 on a2."ApplicantGenId" = a3."ApplicantGenId" and a2."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."IntakeAgency_County" iac on a3."CountyGenId" = iac."CountyGenId"
+
+left join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join public.case_by_scanstatus cbs on  cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+where
+
+case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+into inprogress;
+
+
+
+RETURN json_build_object('inprogress',coalesce(inprogress,0));
+
+
+
+ END;
+
+ $function$
+

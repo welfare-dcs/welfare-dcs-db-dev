@@ -1,0 +1,29 @@
+CREATE OR REPLACE FUNCTION public.appealsqueuestatus()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+--DECLARE result json:='[{"lable":"Open","id":"open"},{"lable":"Approved","id":"approved"},{"lable":"Denied","id":"denied"}]';
+
+
+
+DECLARE result json:='[{"lable":"Open","id":"open"}]';
+
+
+
+begin
+
+
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

@@ -1,0 +1,47 @@
+CREATE OR REPLACE FUNCTION public.rpteligibleuserlst(_id integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+/*SELECT id, username, title, firstname, lastname, profilephoto, email, 
+
+ * mobile, createdby, updatedby, createdon, displayname, passwrdresetattempt, roleid, confirmed, status, 
+
+ * userlogged, eligibilityofficerid, countyid
+
+FROM public.fssauser;
+
+*/
+
+   select Json_agg(row_to_json(t1)) from (select * from (
+
+select id, username, title, firstname, lastname, profilephoto ,cast(unnest(string_to_array(f.eligibilityofficerid,',') ) as int)as eid
+
+from public.fssauser f where f.eligibilityofficerid is not null order by firstname asc) as dt(c)  where eid = _id)t1 into result;
+
+
+
+RETURN coalesce(result,'[]');
+
+
+
+ 
+
+
+
+ END;
+
+
+
+ $function$
+

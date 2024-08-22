@@ -1,0 +1,37 @@
+CREATE OR REPLACE FUNCTION public.updatecounty(_eligibleofficeid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+delete from dbo."IntakeAgency_County" where eligibleofficeid=_eligibleofficeid;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object(
+
+'data',coalesce(result,'[]')
+
+)),'[]');
+
+
+
+
+
+
+
+ END;
+
+
+
+ $function$
+

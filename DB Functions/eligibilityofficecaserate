@@ -1,0 +1,51 @@
+CREATE OR REPLACE FUNCTION public.eligibilityofficecaserate()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+t.eligibilityofficename as "eligibilityoffice"
+
+, t.description as "abbrevation"
+
+, t.contractbeigndate as "effectivedate"
+
+, t.contractenddate as "expirationdate"
+
+, t.case_rate as "caserate"
+
+, t.id as "id"
+
+from public.teligibilityoffice t 
+
+where 
+
+t.status in ('A','I')
+
+order by t.eligibilityofficename asc
+
+)t1 into result;
+
+   
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

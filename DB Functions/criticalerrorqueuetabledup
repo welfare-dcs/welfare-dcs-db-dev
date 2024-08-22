@@ -1,0 +1,801 @@
+CREATE OR REPLACE FUNCTION public.criticalerrorqueuetabledup(_offset integer, _limit integer, _agency character varying, _county character varying, _fromdate character varying, _todate character varying, _sortcolumn character varying, _sortorder character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total int4;
+
+declare offsetValue int4 = 10;
+
+
+
+begin
+
+
+
+    offsetValue = offsetValue * _offset;
+
+
+
+if _offset = 0 then
+
+
+
+select
+
+count(*)
+
+from
+
+dbo."Applicant" a
+
+inner join dbo."ElegibilityQueue" eq on a."ApplicantGenId" = eq."ApplicantGenId"
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join public.teligibilityoffice teo on adr."CountyGenId" = teo.id 
+
+--inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+--inner join dbo."IntakeAgency" ia on iac."IntakeAgencyCode" = ia."IntakeAgencyCode"
+
+left outer join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+where eq."PriorityName" != 'None'
+
+and rec."ErrorCategoryDescription" is not null
+
+and rec."IsCriticalInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+and e."ErrorGenId" is not null
+
+and case when _agency = 'All' then true else teo.id = any(_agency ::int[]) end
+
+and case when _county = 'All' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+into total;
+
+
+
+else
+
+
+
+total = 0;
+
+
+
+end if;
+
+
+
+if _sortcolumn = 'casenumber' then
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName"))  as "applicantname",
+
+a2."CreateDate" as "applicationdate", rc."CountyName" as "countyname",eq."PriorityName" as "priority",a."ApplicantGenId",ms."MonitoringSequenceGenId",e."ErrorGenId",teo.id
+
+from
+
+dbo."Applicant" a
+
+inner join dbo."ElegibilityQueue" eq on a."ApplicantGenId" = eq."ApplicantGenId"
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join public.teligibilityoffice teo on adr."CountyGenId" = teo.id 
+
+--inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+--inner join dbo."IntakeAgency" ia on iac."IntakeAgencyCode" = ia."IntakeAgencyCode"
+
+left outer join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+where eq."PriorityName" != 'None'
+
+and rec."ErrorCategoryDescription" is not null
+
+and rec."IsCriticalInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+and e."ErrorGenId" is not null
+
+and case when _agency = 'All' then true else teo.id = any(_agency ::int[]) end
+
+and case when _county = 'All' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by casenumber asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName"))  as "applicantname",
+
+a2."CreateDate" as "applicationdate", rc."CountyName" as "countyname",eq."PriorityName" as "priority",a."ApplicantGenId",ms."MonitoringSequenceGenId",e."ErrorGenId",teo.id 
+
+from
+
+dbo."Applicant" a
+
+inner join dbo."ElegibilityQueue" eq on a."ApplicantGenId" = eq."ApplicantGenId"
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join public.teligibilityoffice teo on adr."CountyGenId" = teo.id 
+
+--inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+--inner join dbo."IntakeAgency" ia on iac."IntakeAgencyCode" = ia."IntakeAgencyCode"
+
+left outer join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+where eq."PriorityName" != 'None'
+
+and rec."ErrorCategoryDescription" is not null
+
+and rec."IsCriticalInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+and e."ErrorGenId" is not null
+
+and case when _agency = 'All' then true else teo.id = any(_agency ::int[]) end
+
+and case when _county = 'All' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by casenumber desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+elsif _sortcolumn ='applicantname' then
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName"))  as "applicantname",
+
+a2."CreateDate" as "applicationdate", rc."CountyName" as "countyname",eq."PriorityName" as "priority",a."ApplicantGenId",ms."MonitoringSequenceGenId",e."ErrorGenId",teo.id
+
+from
+
+dbo."Applicant" a
+
+inner join dbo."ElegibilityQueue" eq on a."ApplicantGenId" = eq."ApplicantGenId"
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join public.teligibilityoffice teo on adr."CountyGenId" = teo.id 
+
+--inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+--inner join dbo."IntakeAgency" ia on iac."IntakeAgencyCode" = ia."IntakeAgencyCode"
+
+left outer join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+where eq."PriorityName" != 'None'
+
+and rec."ErrorCategoryDescription" is not null
+
+and rec."IsCriticalInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+and e."ErrorGenId" is not null
+
+and case when _agency = 'All' then true else teo.id = any(_agency ::int[]) end
+
+and case when _county = 'All' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by applicantname asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName"))  as "applicantname",
+
+a2."CreateDate" as "applicationdate", rc."CountyName" as "countyname",eq."PriorityName" as "priority",a."ApplicantGenId",ms."MonitoringSequenceGenId",e."ErrorGenId",teo.id
+
+from
+
+dbo."Applicant" a
+
+inner join dbo."ElegibilityQueue" eq on a."ApplicantGenId" = eq."ApplicantGenId"
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join public.teligibilityoffice teo on adr."CountyGenId" = teo.id 
+
+--inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+--inner join dbo."IntakeAgency" ia on iac."IntakeAgencyCode" = ia."IntakeAgencyCode"
+
+left outer join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+where eq."PriorityName" != 'None'
+
+and rec."ErrorCategoryDescription" is not null
+
+and rec."IsCriticalInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+and e."ErrorGenId" is not null
+
+and case when _agency = 'All' then true else teo.id = any(_agency ::int[]) end
+
+and case when _county = 'All' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by applicantname desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+elsif _sortcolumn ='applicationdate' then
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName"))  as "applicantname",
+
+a2."CreateDate" as "applicationdate", rc."CountyName" as "countyname",eq."PriorityName" as "priority",a."ApplicantGenId",ms."MonitoringSequenceGenId",e."ErrorGenId",teo.id
+
+from
+
+dbo."Applicant" a
+
+inner join dbo."ElegibilityQueue" eq on a."ApplicantGenId" = eq."ApplicantGenId"
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join public.teligibilityoffice teo on adr."CountyGenId" = teo.id 
+
+--inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+--inner join dbo."IntakeAgency" ia on iac."IntakeAgencyCode" = ia."IntakeAgencyCode"
+
+left outer join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+where eq."PriorityName" != 'None'
+
+and rec."ErrorCategoryDescription" is not null
+
+and rec."IsCriticalInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+and e."ErrorGenId" is not null
+
+and case when _agency = 'All' then true else teo.id = any(_agency ::int[]) end
+
+and case when _county = 'All' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by applicationdate asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName"))  as "applicantname",
+
+a2."CreateDate" as "applicationdate", rc."CountyName" as "countyname",eq."PriorityName" as "priority",a."ApplicantGenId",ms."MonitoringSequenceGenId",e."ErrorGenId",teo.id
+
+from
+
+dbo."Applicant" a
+
+inner join dbo."ElegibilityQueue" eq on a."ApplicantGenId" = eq."ApplicantGenId"
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join public.teligibilityoffice teo on adr."CountyGenId" = teo.id 
+
+--inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+--inner join dbo."IntakeAgency" ia on iac."IntakeAgencyCode" = ia."IntakeAgencyCode"
+
+left outer join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+where eq."PriorityName" != 'None'
+
+and rec."ErrorCategoryDescription" is not null
+
+and rec."IsCriticalInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+and e."ErrorGenId" is not null
+
+and case when _agency = 'All' then true else teo.id = any(_agency ::int[]) end
+
+and case when _county = 'All' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by applicationdate desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+elsif _sortcolumn ='countyname' then
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName"))  as "applicantname",
+
+a2."CreateDate" as "applicationdate", rc."CountyName" as "countyname",eq."PriorityName" as "priority",a."ApplicantGenId",ms."MonitoringSequenceGenId",e."ErrorGenId",teo.id
+
+from
+
+dbo."Applicant" a
+
+inner join dbo."ElegibilityQueue" eq on a."ApplicantGenId" = eq."ApplicantGenId"
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join public.teligibilityoffice teo on adr."CountyGenId" = teo.id 
+
+--inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+--inner join dbo."IntakeAgency" ia on iac."IntakeAgencyCode" = ia."IntakeAgencyCode"
+
+left outer join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+where eq."PriorityName" != 'None'
+
+and rec."ErrorCategoryDescription" is not null
+
+and rec."IsCriticalInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+and e."ErrorGenId" is not null
+
+and case when _agency = 'All' then true else teo.id = any(_agency ::int[]) end
+
+and case when _county = 'All' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by countyname asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName"))  as "applicantname",
+
+a2."CreateDate" as "applicationdate", rc."CountyName" as "countyname",eq."PriorityName" as "priority",a."ApplicantGenId",ms."MonitoringSequenceGenId",e."ErrorGenId",teo.id
+
+from
+
+dbo."Applicant" a
+
+inner join dbo."ElegibilityQueue" eq on a."ApplicantGenId" = eq."ApplicantGenId"
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join public.teligibilityoffice teo on adr."CountyGenId" = teo.id 
+
+--inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+--inner join dbo."IntakeAgency" ia on iac."IntakeAgencyCode" = ia."IntakeAgencyCode"
+
+left outer join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+where eq."PriorityName" != 'None'
+
+and rec."ErrorCategoryDescription" is not null
+
+and rec."IsCriticalInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+and e."ErrorGenId" is not null
+
+and case when _agency = 'All' then true else teo.id = any(_agency ::int[]) end
+
+and case when _county = 'All' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by countyname desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+elsif _sortcolumn ='priority' then
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName"))  as "applicantname",
+
+a2."CreateDate" as "applicationdate", rc."CountyName" as "countyname",eq."PriorityName" as "priority",a."ApplicantGenId",ms."MonitoringSequenceGenId",e."ErrorGenId",teo.id
+
+from
+
+dbo."Applicant" a
+
+inner join dbo."ElegibilityQueue" eq on a."ApplicantGenId" = eq."ApplicantGenId"
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join public.teligibilityoffice teo on adr."CountyGenId" = teo.id 
+
+--inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+--inner join dbo."IntakeAgency" ia on iac."IntakeAgencyCode" = ia."IntakeAgencyCode"
+
+left outer join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+where eq."PriorityName" != 'None'
+
+and rec."ErrorCategoryDescription" is not null
+
+and rec."IsCriticalInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+and e."ErrorGenId" is not null
+
+and case when _agency = 'All' then true else teo.id = any(_agency ::int[]) end
+
+and case when _county = 'All' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by priority asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName"))  as "applicantname",
+
+a2."CreateDate" as "applicationdate", rc."CountyName" as "countyname",eq."PriorityName" as "priority",a."ApplicantGenId",ms."MonitoringSequenceGenId",e."ErrorGenId",teo.id
+
+from
+
+dbo."Applicant" a
+
+inner join dbo."ElegibilityQueue" eq on a."ApplicantGenId" = eq."ApplicantGenId"
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+--inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+--inner join dbo."IntakeAgency" ia on iac."IntakeAgencyCode" = ia."IntakeAgencyCode"
+
+inner join public.teligibilityoffice teo on adr."CountyGenId" = teo.id 
+
+left outer join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+where eq."PriorityName" != 'None'
+
+and rec."ErrorCategoryDescription" is not null
+
+and rec."IsCriticalInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+and e."ErrorGenId" is not null
+
+and case when _agency = 'All' then true else teo.id = any(_agency ::int[]) end
+
+and case when _county = 'All' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+order by priority desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+ELSE
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",concat(a."ApplicantFirstName",concat(' ',a."ApplicantLastName"))  as "applicantname",
+
+a2."CreateDate" as "applicationdate", rc."CountyName" as "countyname",eq."PriorityName" as "priority",a."ApplicantGenId",ms."MonitoringSequenceGenId",e."ErrorGenId",teo.id
+
+from
+
+dbo."Applicant" a
+
+inner join dbo."ElegibilityQueue" eq on a."ApplicantGenId" = eq."ApplicantGenId"
+
+left join dbo."Application" a2 on a2."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+inner join dbo."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left outer join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId"
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join public.teligibilityoffice teo on adr."CountyGenId" = teo.id 
+
+--inner join dbo."IntakeAgency_County" iac on adr."CountyGenId" = iac."CountyGenId"
+
+--inner join dbo."IntakeAgency" ia on iac."IntakeAgencyCode" = ia."IntakeAgencyCode"
+
+left outer join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+where eq."PriorityName" != 'None'
+
+and rec."ErrorCategoryDescription" is not null
+
+and rec."IsCriticalInd" = true
+
+and ms."MonitoringSequenceGenId" is not null
+
+and e."ErrorGenId" is not null
+
+and case when _agency = 'All' then true else teo.id = any(_agency ::int[]) end
+
+and case when _county = 'All' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('totalCount',total,'data',result)),'[]');
+
+
+
+ END;
+
+ $function$
+

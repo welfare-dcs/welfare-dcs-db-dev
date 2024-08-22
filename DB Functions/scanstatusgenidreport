@@ -1,0 +1,109 @@
+CREATE OR REPLACE FUNCTION public.scanstatusgenidreport()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+
+
+select jsonb_agg(row_to_json(t) ) from
+
+(select *  from 
+
+(select  
+
+t.id,t.eligibilityofficename ,
+
+t."ApplicationSignedDate" 
+
+, t."ScanStatusDescription" 
+
+, array_to_string(array_agg(distinct t.errorstatus),',') as errorstatus
+
+, t."casenumber",
+
+t."ToBeScannedReason",t."ToBeScannedReasonDescription" 
+
+from 
+
+(select teo.id,teo.eligibilityofficename ,
+
+a."ApplicationSignedDate" 
+
+, rss."ScanStatusDescription" 
+
+, case when e.errorstatus is TRUE then 'Y' else 'N' end as errorstatus
+
+, concat(a."ApplicantGenId",'-',a."ApplicationSequence") as "casenumber",
+
+a."ToBeScannedReason",rtbsr."ToBeScannedReasonDescription" 
+
+ from 
+
+dbo."Application" a 
+
+inner join dbo."Applicant" a2 on a."ApplicantGenId" = a2."ApplicantGenId" and a."ScanStatusGenId" = 4
+
+inner join dbo."IntakeAgency_County" iac on a2."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."MonitoringSequence" ms on ms."ApplicantGenId" = a."ApplicantGenId"
+
+   and ms."ApplicationSequence" = a."ApplicationSequence" and ms."ReviewedBy" is null
+
+left join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId" -- and e."ApprovedInd" is false 
+
+left join dbo."ref_ScanStatus" rss on rss."ScanStatusGenId"= a."ScanStatusGenId" 
+
+left join dbo."ref_ToBeScannedReason" rtbsr on rtbsr."ToBeScannedReasonGenId"  = a."ToBeScannedReason"
+
+where 
+
+a."ApplicationSignedDate"::date >= '09/20/2021'::date 
+
+group by teo.id,teo.eligibilityofficename ,e.errorstatus,
+
+a."ApplicationSignedDate", 
+
+ rss."ScanStatusDescription",a."ScanStatusGenId"  
+
+, concat(a."ApplicantGenId",'-',a."ApplicationSequence"),
+
+a."ToBeScannedReason",rtbsr."ToBeScannedReasonDescription"
+
+order by concat(a."ApplicantGenId",'-',a."ApplicationSequence"))t
+
+group by t.id,t.eligibilityofficename ,
+
+t."ApplicationSignedDate" 
+
+, t."ScanStatusDescription" 
+
+, t."casenumber",
+
+t."ToBeScannedReason",t."ToBeScannedReasonDescription")t1
+
+where t1.errorstatus = 'N')t into result;
+
+
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

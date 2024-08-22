@@ -1,0 +1,47 @@
+CREATE OR REPLACE FUNCTION public.addrelatedcasebaseontime(_mindatetime timestamp without time zone, _maxdatetime timestamp without time zone)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total_value int:=0;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+distinct
+
+ab."ApplicantGenId" 
+
+, ab."ApplicationSequence" 
+
+, ab."CreatedDate" 
+
+from dbo."ApplicantBatch" ab 
+
+where ab."CreatedDate" between _mindatetime and _maxdatetime
+
+order by ab."CreatedDate" asc
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

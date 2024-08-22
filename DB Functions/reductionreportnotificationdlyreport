@@ -1,0 +1,241 @@
+CREATE OR REPLACE FUNCTION public.reductionreportnotificationdlyreport()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$ 
+
+
+
+DECLARE result json;
+
+declare total int4;
+
+declare globalId12 int4;
+
+declare globalId15 int4;
+
+declare globalId14 int4;
+
+declare globalId8 int4;
+
+declare globalId7 int4;
+
+declare globalId2 int4;
+
+
+
+begin
+
+
+
+    select g."ruleValue"::int into globalId12 from public.globals g where g."globalId" = 12;
+
+    select g."ruleValue"::int into globalId15 from public.globals g where g."globalId" = 15;
+
+    select g."ruleValue"::int into globalId14 from public.globals g where g."globalId" = 14;
+
+    select g."ruleValue"::int into globalId8 from public.globals g where g."globalId" = 8;
+
+    select g."ruleValue"::int into globalId7 from public.globals g where g."globalId" = 7;
+
+    select g."ruleValue"::int into globalId2 from public.globals g where g."globalId" = 2;
+
+
+
+select
+
+  Json_agg(
+
+    row_to_json(t3)
+
+  )
+
+from
+
+  (
+
+    select
+
+              teo.agencymanageremail,
+
+              teo.eligibilityofficename,
+
+              teo.policyconsultantemail,
+
+              teo.policyconsultantname,
+
+              teo.id,
+
+              teo.case_rate,
+
+              a."ApplicantFirstName",
+
+              a."ApplicantLastName",
+
+              (
+
+                (
+
+                  EXTRACT(
+
+                    days
+
+                    FROM
+
+                      (now() - a2."SubsidyBeginDate")
+
+                  ) / 7
+
+                ):: int
+
+              ) as "week",
+
+           a2."ApplicantGenId",
+
+              a2."ApplicationSequence",
+
+              concat(f.lastname, ' ', f.firstname) as "agency_manager_name" ,
+
+              to_char(current_date, 'mm-yyyy') as "current_month_year",
+
+              (globalId8) as "eligibility_error_must_be_fixed",
+
+              (globalId12) as "eligibility_error_case_terminated",
+
+              (
+
+        SELECT
+
+          messagebody
+
+        FROM
+
+          public.correspondencetemplate
+
+        where
+
+          id = 3
+
+        limit
+
+          1
+
+      ) as messagebody
+
+            from
+
+              dbo."Applicant" a
+
+              join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId" and a2."IsLimitedEligibility" is not true and a2."ApplicationSignedDate"::date <= current_date - (globalId12 || ' days')::interval
+
+              join dbo."MonitoringSequence" ms on a2."ApplicantGenId" = ms."ApplicantGenId" and a2."ApplicationSequence" = ms."ApplicationSequence"
+
+              inner join dbo."ref_County" rc on a."CountyGenId" = rc."CountyGenId"
+
+              inner join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+              inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+           inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId" and e."FineDate" is not null and to_char(e."FineDate", 'mm-yyyy') = to_char(current_date - 5, 'mm-yyyy')
+
+left join dbo."Appeals" a3 on e."ErrorGenId" = a3.errorid
+
+           left join public.fssauser f on teo.agencymanager::integer = f.id
+
+left join public.case_by_scanstatus cbs on  cbs.applicationnumber = concat(a2."ApplicantGenId",'-',a2."ApplicationSequence")
+
+        where 
+
+case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+        and case
+
+-- 1. A case that has an error marked as cannot be corrected (goes to GAR)
+
+when  e."ErrorCategoryGenId" = 2 and e."CannotBeCorrected" is not null then true
+
+-- 2. A case where an appeal has been denied after 6 days (Days in which a case must be terminated by ES after appeal denial)
+
+when e."ErrorCategoryGenId" = 2 and a3."AppealDate"::date < a3."AppealDenyDate"::date - (globalId15 || ' days')::interval then true
+
+-- 3. A case where an error has been corrected but was corrected after 23 days
+
+when e."ErrorCategoryGenId" = 2 and e.errorstatus is true and (e."ApprovedInd" is false or e."ApprovedInd" is null or e."FixDate" is null) and e."CreateDate"::date < current_date - (globalId8 || ' days')::interval then true
+
+-- 4. A case has been singed by provider but no documents were scanned within 13 (Days in which no documents were not scanned  to notify ES to terminate the case)
+
+when a2."ApplicationSignedDate"::date < current_date - (globalId2 || ' days')::interval and a2."ScanStatusGenId" = 1 then true
+
+-- Days in which documentation has been scanned and not reviewed by an Eligibility Specialist
+
+when a2."ApplicationSignedDate"::date < current_date - (globalId14 || ' days')::interval and a2."ScanStatusGenId" = 2 then true
+
+-- 5. A case in which errors have not been corrected within 13 days (Days in which eligibility errors must be fixed )
+
+-- when (select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" =  ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is null and e."CannotBeCorrected" is null and  e."RemovedByPolicy" is null and e."FixDate" is null and e.errorstatus is true and e."CreateDate"::date < current_date - ((select g."ruleValue"::int from public.globals g where g."globalId" = 8) || ' days')::interval) > 0 then true
+
+-- 6. A case in which correction was denied, no appeal was created, no termination(Days in which a correction denial may be appealed)
+
+when (select count(a3.*) from dbo."Appeals" a3  where e."MonitoringSequenceGenId" = a3."MonitoringSequenceGenId") = 0 and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is false and a2."TerminationDate" is null then true
+
+-- 7. A case in which errors are outstanding (no fixed date) after 23 days (Days in which a case with critical errors appear on the Preview Payment Reduction report)
+
+-- when (select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" =  ms."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."ApprovedInd" is null and e."CannotBeCorrected" is null and  e."RemovedByPolicy" is null and e."FixDate" is null and e.errorstatus is true and e."CreateDate"::date < current_date - ((select g."ruleValue"::int from public.globals g where g."globalId" = 12) || ' days')::interval) > 0 then true
+
+end
+
+            group by
+
+              teo.agencymanageremail,
+
+              teo.eligibilityofficename,
+
+              teo.policyconsultantemail,
+
+              teo.policyconsultantname,
+
+              teo.id,
+
+              teo.case_rate,
+
+              a."ApplicantFirstName",
+
+              a."ApplicantLastName",
+
+              teo.case_rate,
+
+              a2."ApplicationSignedDate",
+
+              a2."SubsidyBeginDate",
+
+              a2."ApplicantGenId",
+
+              a2."ApplicationSequence",
+
+              f.firstname , f.lastname ,current_date,eligibility_error_must_be_fixed,eligibility_error_case_terminated,
+
+              messagebody
+
+  ) t3 into result;
+
+RETURN COALESCE(
+
+  json_build_array(
+
+    json_build_object(
+
+      'data',
+
+      COALESCE(result, '[]')
+
+    )
+
+  ),
+
+  '[]'
+
+);
+
+END;
+
+$function$
+

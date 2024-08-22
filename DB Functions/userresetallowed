@@ -1,0 +1,29 @@
+CREATE OR REPLACE FUNCTION public.userresetallowed(_username character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+begin
+
+      
+
+select Json_agg(row_to_json(t)) from 
+
+(select coalesce((now()::date - f2.passwrdreset::date),-1) 
+
+AS days from public.fssauser f2 where username = _username)t into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

@@ -1,0 +1,51 @@
+CREATE OR REPLACE FUNCTION public.correspondencedetails()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE correspondencecarboncopyto json;
+
+DECLARE correspondencefrom json;
+
+DECLARE correspondencesendto json;
+
+DECLARE correspondencesubject json;
+
+
+
+begin
+
+
+
+   select Json_agg(row_to_json(t1)) from (SELECT id, variablename, displayorder FROM public.correspondencecarboncopyto order by displayorder)t1 into correspondencecarboncopyto;
+
+   
+
+   select Json_agg(row_to_json(t1)) from (SELECT id, variablename, displayorder FROM public.correspondencefrom order by displayorder)t1 into correspondencefrom;
+
+
+
+    select Json_agg(row_to_json(t1)) from (SELECT id, variablename, displayorder FROM public.correspondencesendto order by displayorder)t1 into correspondencesendto;
+
+   
+
+   select Json_agg(row_to_json(t1)) from (SELECT id, variablename, displayorder FROM public.correspondencesubject order by displayorder)t1 into correspondencesubject;
+
+
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('correspondencecarboncopyto',coalesce(correspondencecarboncopyto,'[]'),
+
+'correspondencesendto',coalesce(correspondencesendto,'[]'),'correspondencesubject',coalesce(correspondencesubject,'[]'),
+
+'correspondencefrom',coalesce(correspondencefrom,'[]'))));
+
+
+
+ END;
+
+ $function$
+

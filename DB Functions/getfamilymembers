@@ -1,0 +1,27 @@
+CREATE OR REPLACE FUNCTION public.getfamilymembers(_caseid character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+DECLARE result json;
+
+begin
+
+   select Json_agg(row_to_json(t)) from (select i."IndividualFirstName" ,i."IndividualLastName", i."IndividualMiddleInitial" ,i."IndividualGenId"
+
+from dbo."Family" f 
+
+inner join dbo."Individual" i on f."IndividualGenId" = i."IndividualGenId"
+
+inner join public.userrelationtypes u  on f."ApplicantRelationshipGenId" = u.refrelationshiptypegenid
+
+where  concat(f."ApplicantGenId",concat('-',f."ApplicationSequence"))  = _caseid)t into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+end;
+
+$function$
+

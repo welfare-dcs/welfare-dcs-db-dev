@@ -1,0 +1,137 @@
+CREATE OR REPLACE FUNCTION public.eligibilitydetails(_caseid character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare basic_details json;
+
+begin
+
+
+
+select row_to_json(t) from (
+
+select distinct
+
+a."ApplicationCompleteDate"
+
+, a2."ApplicantFirstName"
+
+, a2."ApplicantLastName"
+
+, a2."ApplicantPhoneNumber"
+
+, a3."AddressLine1"
+
+, a3."City"
+
+, a3."ZipCode"
+
+, rc."CountyName"
+
+, rs."StateName"
+
+, a2."GrossIncome"
+
+, a2."FamilySize"
+
+, i."DateOfBirth"
+
+, ms."MonitoringSequenceGenId"
+
+, a2."LanguageDescription" as "primarylanguage"
+
+, a2."Employer" as "employer"
+
+, a2."EmployerAreaCode" as "employerareacode"
+
+, a2."EmployerPhoneNumber" as "employerphonenumber"
+
+, a2."SelfEmploy" as "selfemploy"
+
+, a."FosterCareFamilyInd" as "fostercarefamilyind"
+
+, a."SubsidyBeginDate" as "subsidybegindate"
+
+, a."SubsidyEndDate" as "subsidyenddate"
+
+, a."ApplicationSignedBy" as "applicationsignedby"
+
+, a."ApplicationSignedDate" as "applicationsigneddate"
+
+, a."ApplicationSignedInd" as "applicationsignedind"
+
+, ms."TANFImpactReferral" as "tanfimpactreferral"
+
+, a3."StateCode" as "state"
+
+, case when a."AssetsExceedMillionDollar" is true then true else false end as "assetovermilliondollar"
+
+, a."ScanStatusGenId" as "ScanStatusGenId"
+
+, a2."ApplicantGenId"
+
+, case when a."PovertyLevelGenId" is not null then concat(rpl."BeginPercent",'% - ', rpl."ToPercent",'%') else null
+
+end as "PovertyLevelDescription"
+
+, case when (select
+
+count(*)
+
+from public."ANNUALIZEDINCOMES" ai
+
+where
+
+ai."ApplicantGenId" = a."ApplicantGenId") > 0 then true else false end as "annualizedincome_indicator"
+
+,a3."AddressGenId"
+
+from dbo."Applicant" a2
+
+join dbo."Application" a on a2."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId" and a."ApplicationSequence" = ms."ApplicationSequence"
+
+left join dbo."Address" a3 on a."ApplicantGenId" = a3."ApplicantGenId" and a."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+left join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+left join dbo."ref_State" rs on a3."StateCode" = rs."StateCode"
+
+left join dbo."Family" f on a."ApplicantGenId" = f."ApplicantGenId" and a."ApplicationSequence" = f."ApplicationSequence"
+
+left join dbo."Ref_PovertyLevel" rpl on a."PovertyLevelGenId" = rpl."PovertyLevelGenId"
+
+left join dbo."Individual" i on f."IndividualGenId" = i."IndividualGenId"
+
+--and i."IndividualFirstName" = a2."ApplicantFirstName"
+
+where concat(a."ApplicantGenId",concat('-',a."ApplicationSequence"))= _caseid
+
+order by ms."MonitoringSequenceGenId" desc, a3."AddressGenId" desc
+
+limit 1
+
+)t  into basic_details;
+
+
+
+
+
+select row_to_json(t) from (select COALESCE(basic_details,'{}') as "basic_details")t  into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

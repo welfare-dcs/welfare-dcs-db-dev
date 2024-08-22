@@ -1,0 +1,43 @@
+CREATE OR REPLACE FUNCTION public.getannualizedincome(_applicantgenid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+a."Amount" as "amount"
+
+, a."Note" as "note"
+
+, a."IncomeDate" as "date"
+
+from public."ANNUALIZEDINCOMES" a
+
+where 
+
+a."ApplicantGenId" = _applicantgenid
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

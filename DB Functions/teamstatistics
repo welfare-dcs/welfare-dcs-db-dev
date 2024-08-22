@@ -1,0 +1,391 @@
+CREATE OR REPLACE FUNCTION public.teamstatistics(_offset integer, _limit integer, _fromdate character varying, _todate character varying, _eligibilityoffice character varying, _county character varying, _sortcolumn character varying, _sortorder character varying, _userid character varying, searchvalue character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total int4;
+
+declare offsetValue int4 = 10;
+
+declare beginyear character varying = '';
+
+declare endyear character varying = '';
+
+declare totalweek int4 =0;
+
+
+
+begin
+
+    beginyear = concat('01/01/', TO_CHAR(now():: DATE, 'yyyy'));
+
+    endyear = concat('31/12/', TO_CHAR(now():: DATE, 'yyyy'));
+
+--   raise notice 'beginyear: %', beginyear;
+
+--   raise notice 'endyear: %', endyear;
+
+   totalweek:= EXTRACT(days FROM (coalesce(to_date(_fromdate, 'dd-mm-yyyy'),(select max("ReviewedDate") from dbo."MonitoringSequence")) - coalesce(to_date(_todate, 'dd-mm-yyyy'),(select min("ReviewedDate") from dbo."MonitoringSequence"))) / 7)::int;
+
+
+
+if totalweek = 0 then
+
+   totalweek:=1;
+
+end if;
+
+
+
+--   raise notice 'totalweek: %', totalweek;
+
+
+
+offsetValue = offsetValue * _offset;
+
+
+
+if _offset = 0 then
+
+
+
+
+
+-- select count(t) from (
+
+-- select concat(f.firstname,concat(' ',f.lastname)) as "monitorname",f.id as "id", f.roleid as "roleid" from public.fssauser f
+
+-- inner join dbo."MonitoringSequence" ms on f.id = ms."ReviewedBy"
+
+-- where f.status ='A'
+
+-- and case when _eligibilityoffice = '' then true else string_to_array(f.eligibilityofficerid,',') && _eligibilityoffice::text[] end
+
+-- and case when _county = '' then true else string_to_array(f.countyid,',') && _county::text[] end
+
+-- and case when _userid = '' then true else f.id = any(_userid::int[]) end
+
+-- and case when searchvalue = '' then true else lower(concat(f.firstname,concat(' ',f.lastname))) like lower(searchvalue) end
+
+-- --and f.roleid in ('ccc62245-cb4c-4f90-80bd-884f12dc6600','fc834df1-6e81-459a-a743-59b2502eecc8')
+
+-- group by monitorname, id, roleid
+
+-- )t
+
+-- into total;
+
+
+
+select count(t) from (
+
+select concat(f.firstname,' ',f.lastname) as "monitorname",f.id   from public.fssauser f
+
+inner join public.monitoringsequence_reviewby mr on f.id = mr.review_by
+
+and case when _fromdate = '' and _todate = '' then true else mr.created_at::date between to_date(_fromdate, 'dd-mm-yyyy') and  to_date(_todate, 'dd-mm-yyyy') end
+
+inner join dbo."MonitoringSequence" ms on mr."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and ms."DeleteDate" is null
+
+where f.status ='A'
+
+and case when _eligibilityoffice = '' then true else string_to_array(f.eligibilityofficerid,',') && _eligibilityoffice::text[] end
+
+and case when _county = '' then true else string_to_array(f.countyid,',') && _county::text[] end
+
+and case when _userid = '' then true else f.id = any(_userid::int[]) end
+
+and case when searchvalue = '' then true else lower(concat(f.firstname,concat(' ',f.lastname))) like lower(searchvalue) end
+
+group by monitorname, f.id
+
+)t
+
+into total;
+
+
+
+else
+
+
+
+total = 0;
+
+
+
+end if;
+
+
+
+-- select Json_agg(row_to_json(t1)) from (
+
+-- select
+
+-- t.monitorname
+
+-- ,t.roleid
+
+-- ,(
+
+-- select count(*) from
+
+-- dbo."MonitoringSequence" ms2
+
+-- where ms2."ReviewedBy" = t.id
+
+-- and ms2."DeleteDate" is null
+
+-- and case when _fromdate = '' and _todate = '' then true else ms2."ReviewedDate"::date between to_date(_fromdate, 'dd-mm-yyyy') and  to_date(_todate, 'dd-mm-yyyy') end
+
+-- ) as "totalreviewed"
+
+-- ,(
+
+-- select count(*) from
+
+-- dbo."MonitoringSequence" ms2
+
+-- where ms2."ReviewedBy" = t.id
+
+-- and ms2."DeleteDate" is null
+
+-- and ms2."ReviewedDate"::date between to_date(beginyear, 'dd-mm-yyyy') and  to_date(endyear, 'dd-mm-yyyy')
+
+-- ) as "reviewedytd"
+
+-- ,(
+
+-- select ABS(count(*) / totalweek) from
+
+-- dbo."MonitoringSequence" ms2
+
+-- where ms2."ReviewedBy" = t.id
+
+-- and ms2."DeleteDate" is null
+
+-- and case when _fromdate = '' and _todate = '' then true else ms2."ReviewedDate"::date between to_date(_fromdate, 'dd-mm-yyyy') and  to_date(_todate, 'dd-mm-yyyy') end
+
+-- ) as "weeklyaverage"
+
+-- ,(
+
+-- select count(*) from
+
+-- dbo."MonitoringSequence" ms2
+
+-- inner join dbo."Error" e on ms2."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+-- where ms2."ReviewedBy" = t.id
+
+-- and ms2."DeleteDate" is null
+
+-- and e."DeleteDate" is null
+
+-- and case when _fromdate = '' and _todate = '' then true else ms2."ReviewedDate"::date between to_date(_fromdate, 'dd-mm-yyyy') and  to_date(_todate, 'dd-mm-yyyy') end
+
+-- ) as "totalerrorfound"
+
+-- ,(
+
+-- select count(*) from
+
+-- dbo."MonitoringSequence" ms2
+
+-- inner join dbo."Error" e on ms2."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+-- where ms2."ReviewedBy" = t.id
+
+-- and ms2."DeleteDate" is null
+
+-- and e."DeleteDate" is null
+
+-- and ((e."ApprovedInd" is true) OR (e."RemovedByPolicy" IS NOT NULL))
+
+-- and case when _fromdate = '' and _todate = '' then true else ms2."ReviewedDate"::date between to_date(_fromdate, 'dd-mm-yyyy') and  to_date(_todate, 'dd-mm-yyyy') end
+
+-- ) as "totalerroroverturned"
+
+-- ,(
+
+-- select ROUND(avg(
+
+-- (
+
+-- (DATE_PART('day', rh."EndDate"::timestamp - rh."BeginDate"::timestamp) * 24 +
+
+--       DATE_PART('hour', rh."EndDate"::timestamp - rh."BeginDate"::timestamp) * 60) +
+
+--       DATE_PART('minute', rh."EndDate"::timestamp - rh."BeginDate"::timestamp) * 60
+
+-- )
+
+-- /60)::numeric, 2)  from
+
+-- dbo."MonitoringSequence" ms2
+
+-- inner join dbo."ReviewHistory" rh on ms2."MonitoringSequenceGenId" = rh."MonitoringSequenceGenId"
+
+-- where ms2."ReviewedBy" = t.id
+
+-- and ms2."ReviewedBy" = rh."UserGenId"
+
+-- and case when _fromdate = '' and _todate = '' then true else ms2."ReviewedDate"::date between to_date(_fromdate, 'dd-mm-yyyy') and  to_date(_todate, 'dd-mm-yyyy') end
+
+-- ) as "averageminutesperreview"
+
+-- from
+
+-- (
+
+-- select concat(f.firstname,concat(' ',f.lastname)) as "monitorname",f.id as "id", f.roleid as "roleid" from public.fssauser f
+
+-- inner join dbo."MonitoringSequence" ms on f.id = ms."ReviewedBy"
+
+-- where f.status ='A'
+
+-- and case when _eligibilityoffice = '' then true else string_to_array(f.eligibilityofficerid,',') && _eligibilityoffice::text[] end
+
+-- and case when _county = '' then true else string_to_array(f.countyid,',') && _county::text[] end
+
+-- and case when _userid = '' then true else f.id = any(_userid::int[]) end
+
+-- and case when searchvalue = '' then true else lower(concat(f.firstname,concat(' ',f.lastname))) like lower(searchvalue) end
+
+-- --and f.roleid in ('ccc62245-cb4c-4f90-80bd-884f12dc6600','fc834df1-6e81-459a-a743-59b2502eecc8')
+
+-- group by monitorname, id, roleid
+
+-- order by monitorname asc
+
+-- limit _limit
+
+-- offset offsetValue
+
+-- )t
+
+-- )
+
+-- t1 into result;
+
+
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+t.monitorname
+
+, t.id
+
+, count(t."MonitoringSequenceGenId") as "totalreviewed"
+
+, count(t."MonitoringSequenceGenId") as "reviewedytd"
+
+, abs(count(t."MonitoringSequenceGenId")/totalweek)  as "weeklyaverage"
+
+, (
+
+select count(t2.*) from (
+
+select e.id, e."MonitoringSequenceGenId"  from dbo."Error" e
+
+inner join public.monitoringsequence_reviewby mr on t.id = mr.review_by and e."MonitoringSequenceGenId" = mr."MonitoringSequenceGenId"
+
+and case when _fromdate = '' and _todate = '' then true else mr.created_at::date between to_date(_fromdate, 'dd-mm-yyyy') and  to_date(_todate, 'dd-mm-yyyy') end
+
+where e."DeleteDate" is null
+
+group by e.id, e."MonitoringSequenceGenId"
+
+)t2
+
+) as "totalerrorfound"
+
+, (
+
+select count(t3.*) from (
+
+select e.id, e."MonitoringSequenceGenId"  from dbo."Error" e
+
+inner join public.monitoringsequence_reviewby mr on t.id = mr.review_by and e."MonitoringSequenceGenId" = mr."MonitoringSequenceGenId"
+
+and case when _fromdate = '' and _todate = '' then true else mr.created_at::date between to_date(_fromdate, 'dd-mm-yyyy') and  to_date(_todate, 'dd-mm-yyyy') end
+
+where e."DeleteDate" is null
+
+and ((e."ApprovedInd" is true) OR (e."RemovedByPolicy" IS NOT NULL))
+
+group by e.id, e."MonitoringSequenceGenId"
+
+)t3
+
+) as "totalerroroverturned"
+
+, (
+
+select round(avg(EXTRACT(EPOCH FROM (rh."EndDate" - rh."BeginDate"))/60)::numeric,2)
+
+from public.monitoringsequence_reviewby mr
+
+inner join dbo."ReviewHistory" rh on mr."MonitoringSequenceGenId" = rh."MonitoringSequenceGenId" and mr.review_by = rh."UserGenId" and rh."BeginDate"::date between to_date(_fromdate, 'dd-mm-yyyy') and  to_date(_todate, 'dd-mm-yyyy')
+
+where t.id = mr.review_by
+
+and case when _fromdate = '' and _todate = '' then true else mr.created_at::date between to_date(_fromdate, 'dd-mm-yyyy') and  to_date(_todate, 'dd-mm-yyyy') end
+
+) as "averageminutesperreview"
+
+from (
+
+select concat(f.firstname,' ',f.lastname) as "monitorname",f.id , ms."MonitoringSequenceGenId"  from public.fssauser f
+
+inner join public.monitoringsequence_reviewby mr on f.id = mr.review_by
+
+and case when _fromdate = '' and _todate = '' then true else mr.created_at::date between to_date(_fromdate, 'dd-mm-yyyy') and  to_date(_todate, 'dd-mm-yyyy') end
+
+inner join dbo."MonitoringSequence" ms on mr."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" and ms."DeleteDate" is null
+
+where f.status ='A'
+
+and case when _eligibilityoffice = '' then true else string_to_array(f.eligibilityofficerid,',') && _eligibilityoffice::text[] end
+
+and case when _county = '' then true else string_to_array(f.countyid,',') && _county::text[] end
+
+and case when _userid = '' then true else f.id = any(_userid::int[]) end
+
+and case when searchvalue = '' then true else lower(concat(f.firstname,concat(' ',f.lastname))) like lower(searchvalue) end
+
+group by monitorname, f.id, ms."MonitoringSequenceGenId"
+
+)t
+
+group by t.monitorname
+
+, t.id
+
+order by monitorname asc
+
+limit _limit
+
+offset offsetValue
+
+)
+
+t1 into result;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('totalCount',total,'data',coalesce(result,'[]'))),'[]');
+
+
+
+ END;
+
+ $function$
+

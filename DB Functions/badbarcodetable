@@ -1,0 +1,299 @@
+CREATE OR REPLACE FUNCTION public.badbarcodetable(_offset integer, _limit integer, _intakeagency character varying, _startdate character varying, _enddate character varying, _sortcolumn character varying, _sortorder character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total int4;
+
+declare offsetValue int4 = 10;
+
+declare baseurl character varying ='https://d317fohsr517qs.cloudfront.net/';
+
+
+
+begin
+
+
+
+    offsetValue = offsetValue * _offset;
+
+
+
+if _offset = 0 then
+
+
+
+select
+
+count(t)
+
+from
+
+(
+
+select
+
+sdi.id as "id"
+
+, tes.description  as "eligiblity_office"
+
+, sdi."CreatedDate" as "scan_date"
+
+, concat(baseurl,sdi."DocumentPath",'/', sdi."DocumentName") as "link"
+
+, sdi."RemoteSite" as remotesite
+
+from dbo."ScannedDocsIndex" sdi
+
+inner join dbo."BadBarCode" bbc on sdi.id = bbc."DocumentIndexId"
+
+inner join teligibilityoffice tes on tes.description = sdi."RemoteSite"  
+
+and case when _intakeagency ='' then true else tes.id = any(_intakeagency::int[]) end
+
+where
+
+sdi."DocumentProcessStatus" = 'BAD_BAR_CODE'
+
+and sdi."DeletedDate" is null
+
+and case when _startdate = '' and _enddate = '' then true else sdi."CreatedDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+)t
+
+into total;
+
+
+
+else
+
+
+
+total = 0;
+
+
+
+end if;
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+if lower(_sortcolumn) = 'eligiblity_office' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+sdi.id as "id"
+
+, tes.description  as "eligiblity_office"
+
+, sdi."CreatedDate" as "scan_date"
+
+--, concat(baseurl,sdi."DocumentPath",'/', sdi."DocumentName") as "link"
+
+, concat(baseurl,bbc."DocumentPath") as "link"
+
+, sdi."RemoteSite" as remotesite
+
+from dbo."ScannedDocsIndex" sdi
+
+inner join dbo."BadBarCode" bbc on sdi.id = bbc."DocumentIndexId"
+
+inner join teligibilityoffice tes on tes.description = sdi."RemoteSite"  
+
+and case when _intakeagency ='' then true else tes.id = any(_intakeagency::int[]) end
+
+where
+
+sdi."DocumentProcessStatus" = 'BAD_BAR_CODE'
+
+and sdi."DeletedDate" is null
+
+and case when _startdate = '' and _enddate = '' then true else sdi."CreatedDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+order by eligiblity_office asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'scan_date' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+sdi.id as "id"
+
+, tes.description  as "eligiblity_office"
+
+, sdi."CreatedDate" as "scan_date"
+
+--, concat(baseurl,sdi."DocumentPath",'/', sdi."DocumentName") as "link"
+
+, concat(baseurl,bbc."DocumentPath") as "link"
+
+, sdi."RemoteSite" as remotesite
+
+from dbo."ScannedDocsIndex" sdi
+
+inner join dbo."BadBarCode" bbc on sdi.id = bbc."DocumentIndexId"
+
+inner join teligibilityoffice tes on tes.description = sdi."RemoteSite"  
+
+and case when _intakeagency ='' then true else tes.id = any(_intakeagency::int[]) end
+
+where
+
+sdi."DocumentProcessStatus" = 'BAD_BAR_CODE'
+
+and sdi."DeletedDate" is null
+
+and case when _startdate = '' and _enddate = '' then true else sdi."CreatedDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+order by scan_date asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+end if;
+
+
+
+if lower(_sortorder) = 'desc' then
+
+
+
+if lower(_sortcolumn) = 'eligiblity_office' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+sdi.id as "id"
+
+, tes.description  as "eligiblity_office"
+
+, sdi."CreatedDate" as "scan_date"
+
+--, concat(baseurl,sdi."DocumentPath",'/', sdi."DocumentName") as "link"
+
+, concat(baseurl,bbc."DocumentPath") as "link"
+
+, sdi."RemoteSite"  as remotesite
+
+from dbo."ScannedDocsIndex" sdi
+
+inner join dbo."BadBarCode" bbc on sdi.id = bbc."DocumentIndexId"
+
+inner join teligibilityoffice tes on tes.description = sdi."RemoteSite"  
+
+and case when _intakeagency ='' then true else tes.id = any(_intakeagency::int[]) end
+
+where
+
+sdi."DocumentProcessStatus" = 'BAD_BAR_CODE'
+
+and sdi."DeletedDate" is null
+
+and case when _startdate = '' and _enddate = '' then true else sdi."CreatedDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+order by eligiblity_office desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortcolumn) = 'scan_date' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+sdi.id as "id"
+
+, tes.description  as "eligiblity_office"
+
+, sdi."CreatedDate" as "scan_date"
+
+--, concat(baseurl,sdi."DocumentPath",'/', sdi."DocumentName") as "link"
+
+, concat(baseurl,bbc."DocumentPath") as "link"
+
+, sdi."RemoteSite" as remotesite
+
+from dbo."ScannedDocsIndex" sdi
+
+inner join dbo."BadBarCode" bbc on sdi.id = bbc."DocumentIndexId"
+
+inner join teligibilityoffice tes on tes.description = sdi."RemoteSite"  
+
+and case when _intakeagency ='' then true else tes.id = any(_intakeagency::int[]) end
+
+where
+
+sdi."DocumentProcessStatus" = 'BAD_BAR_CODE'
+
+and sdi."DeletedDate" is null
+
+and case when _startdate = '' and _enddate = '' then true else sdi."CreatedDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+order by scan_date desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+end if;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('totalCount',total,'data',coalesce(result,'[]'))),'[]');
+
+
+
+ END;
+
+ $function$
+

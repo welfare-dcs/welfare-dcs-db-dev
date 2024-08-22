@@ -1,0 +1,785 @@
+CREATE OR REPLACE FUNCTION public.materialized_error_count(_casenumber integer, _casesequencenumber integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+begin
+
+
+
+if _casenumber = 0 and _casesequencenumber = 0 then
+
+
+
+-- error_count_1
+
+
+
+delete from public.error_count_1;
+
+
+
+INSERT INTO public.error_count_1
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 AND e."CannotBeCorrected" IS NOT null and e."MonitoringSequenceGenId" is not null
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_2
+
+
+
+delete from public.error_count_2;
+
+
+
+
+
+INSERT INTO public.error_count_2
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+     JOIN dbo."Appeals" a3 ON e."MonitoringSequenceGenId" = a3."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 AND a3."AppealDenyDate"::date < (CURRENT_DATE - (((( SELECT g."ruleValue"::integer AS "ruleValue"
+
+           FROM globals g
+
+          WHERE g."globalId" = 10)) || ' days'::text)::interval))
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_3
+
+
+
+delete from public.error_count_3;
+
+
+
+INSERT INTO public.error_count_3
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 AND e.errorstatus IS TRUE AND (e."ApprovedInd" IS TRUE OR e."CannotBeCorrected" IS NOT NULL OR e."RemovedByPolicy" IS NOT NULL OR e."FixDate" IS NOT NULL) AND e."CreateDate"::date < (CURRENT_DATE - (((( SELECT g."ruleValue"::integer AS "ruleValue"
+
+           FROM globals g
+
+          WHERE g."globalId" = 11)) || ' days'::text)::interval))
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_5
+
+
+
+delete from public.error_count_5;
+
+
+
+INSERT INTO public.error_count_5
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 AND e."ApprovedInd" IS NULL AND e."CannotBeCorrected" IS NULL AND e."RemovedByPolicy" IS NULL AND e."FixDate" IS NULL AND e.errorstatus IS TRUE AND e."CreateDate"::date < (CURRENT_DATE - (((( SELECT g."ruleValue"::integer AS "ruleValue"
+
+           FROM globals g
+
+          WHERE g."globalId" = 8)) || ' days'::text)::interval))
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_6
+
+
+
+delete from public.error_count_6;
+
+
+
+INSERT INTO public.error_count_6
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+     JOIN dbo."Appeals" a3 ON e."MonitoringSequenceGenId" = a3."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 AND e."ApprovedInd" IS FALSE
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_7
+
+
+
+delete from public.error_count_7;
+
+
+
+INSERT INTO public.error_count_7
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 AND e."ApprovedInd" IS NULL AND e."CannotBeCorrected" IS NULL AND e."RemovedByPolicy" IS NULL AND e."FixDate" IS NULL AND e.errorstatus IS TRUE AND e."CreateDate"::date < (CURRENT_DATE - (((( SELECT g."ruleValue"::integer AS "ruleValue"
+
+           FROM globals g
+
+          WHERE g."globalId" = 11)) || ' days'::text)::interval))
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_9_3
+
+
+
+delete from public.error_count_9_3;
+
+
+
+INSERT INTO public.error_count_9_3
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 AND e.errorstatus IS TRUE AND (e."ApprovedInd" IS NOT TRUE OR e."CannotBeCorrected" IS NOT NULL OR e."RemovedByPolicy" IS NOT NULL OR e."FixDate" IS NOT NULL) AND e."CreateDate"::date < (CURRENT_DATE - (((( SELECT g."ruleValue"::integer AS "ruleValue"
+
+           FROM globals g
+
+          WHERE g."globalId" = 12)) || ' days'::text)::interval))
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_9_7
+
+
+
+delete from public.error_count_9_7;
+
+
+
+INSERT INTO public.error_count_9_7
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 AND e."ApprovedInd" IS NULL AND e."CannotBeCorrected" IS NULL AND e."RemovedByPolicy" IS NULL AND e."FixDate" IS NULL AND e.errorstatus IS TRUE AND e."CreateDate"::date < (CURRENT_DATE - (((( SELECT g."ruleValue"::integer AS "ruleValue"
+
+           FROM globals g
+
+          WHERE g."globalId" = 12)) || ' days'::text)::interval))
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_es
+
+
+
+delete from public.error_count_es;
+
+
+
+INSERT INTO public.error_count_es
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 AND e."ApprovedInd" IS FALSE
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_es_appeals
+
+
+
+delete from public.error_count_es_appeals;
+
+
+
+INSERT INTO public.error_count_es_appeals
+
+("MonitoringSequenceGenId", count)
+
+(
+
+ SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+     JOIN dbo."Appeals" a ON e."ErrorGenId" = a.errorid
+
+  WHERE a."AppealDenyDate" IS NOT NULL
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_queue
+
+
+
+delete from public.error_count_queue;
+
+
+
+INSERT INTO public.error_count_queue
+
+("MonitoringSequenceGenId", "CreateDate")
+
+(
+
+ SELECT e."MonitoringSequenceGenId",
+
+    max(e."CreateDate") AS "CreateDate"
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 AND e."RemovedByPolicy" IS NULL AND e."CannotBeCorrected" IS NULL AND e."FixDate" IS NULL AND e."ApprovedInd" IS NULL AND e.errorstatus IS TRUE
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_su_4
+
+
+
+delete from public.error_count_su_4;
+
+
+
+INSERT INTO public.error_count_su_4
+
+("MonitoringSequenceGenId", count)
+
+(
+
+SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 AND e."ApprovedInd" IS NOT TRUE AND e."CannotBeCorrected" IS NULL AND e."FixDate" IS NULL AND e.errorstatus IS TRUE AND e."RemovedByPolicy" IS NULL AND e."CreateDate" > (CURRENT_DATE - (((( SELECT g."ruleValue"::integer AS "ruleValue"
+
+           FROM globals g
+
+          WHERE g."globalId" = 8)) || ' days'::text)::interval))
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+else
+
+
+
+-- error_count_1
+
+
+
+delete from public.error_count_1 where "MonitoringSequenceGenId" in (select ms."MonitoringSequenceGenId" from dbo."MonitoringSequence" ms where ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber);
+
+
+
+
+
+INSERT INTO public.error_count_1
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 AND e."CannotBeCorrected" IS NOT null and ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+
+
+-- error_count_2
+
+
+
+delete from public.error_count_2 where "MonitoringSequenceGenId" in (select ms."MonitoringSequenceGenId" from dbo."MonitoringSequence" ms where ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber);
+
+
+
+INSERT INTO public.error_count_2
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+     JOIN dbo."Appeals" a3 ON e."MonitoringSequenceGenId" = a3."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 and ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber AND a3."AppealDenyDate"::date < (CURRENT_DATE - (((( SELECT g."ruleValue"::integer AS "ruleValue"
+
+           FROM globals g
+
+          WHERE g."globalId" = 10)) || ' days'::text)::interval))
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_3
+
+
+
+delete from public.error_count_3 where "MonitoringSequenceGenId" in (select ms."MonitoringSequenceGenId" from dbo."MonitoringSequence" ms where ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber);
+
+
+
+
+
+INSERT INTO public.error_count_3
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 and ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber AND e.errorstatus IS TRUE AND (e."ApprovedInd" IS TRUE OR e."CannotBeCorrected" IS NOT NULL OR e."RemovedByPolicy" IS NOT NULL OR e."FixDate" IS NOT NULL) AND e."CreateDate"::date < (CURRENT_DATE - (((( SELECT g."ruleValue"::integer AS "ruleValue"
+
+           FROM globals g
+
+          WHERE g."globalId" = 11)) || ' days'::text)::interval))
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_5
+
+
+
+delete from public.error_count_5 where "MonitoringSequenceGenId" in (select ms."MonitoringSequenceGenId" from dbo."MonitoringSequence" ms where ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber);
+
+
+
+INSERT INTO public.error_count_5
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 and ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber AND e."ApprovedInd" IS NULL AND e."CannotBeCorrected" IS NULL AND e."RemovedByPolicy" IS NULL AND e."FixDate" IS NULL AND e.errorstatus IS TRUE AND e."CreateDate"::date < (CURRENT_DATE - (((( SELECT g."ruleValue"::integer AS "ruleValue"
+
+           FROM globals g
+
+          WHERE g."globalId" = 8)) || ' days'::text)::interval))
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_6
+
+
+
+delete from public.error_count_6 where "MonitoringSequenceGenId" in (select ms."MonitoringSequenceGenId" from dbo."MonitoringSequence" ms where ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber);
+
+
+
+INSERT INTO public.error_count_6
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+     JOIN dbo."Appeals" a3 ON e."MonitoringSequenceGenId" = a3."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 and ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber AND e."ApprovedInd" IS FALSE
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_7
+
+
+
+delete from public.error_count_7 where "MonitoringSequenceGenId" in (select ms."MonitoringSequenceGenId" from dbo."MonitoringSequence" ms where ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber);
+
+
+
+INSERT INTO public.error_count_7
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 and ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber AND e."ApprovedInd" IS NULL AND e."CannotBeCorrected" IS NULL AND e."RemovedByPolicy" IS NULL AND e."FixDate" IS NULL AND e.errorstatus IS TRUE AND e."CreateDate"::date < (CURRENT_DATE - (((( SELECT g."ruleValue"::integer AS "ruleValue"
+
+           FROM globals g
+
+          WHERE g."globalId" = 11)) || ' days'::text)::interval))
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_9_3
+
+
+
+delete from public.error_count_9_3 where "MonitoringSequenceGenId" in (select ms."MonitoringSequenceGenId" from dbo."MonitoringSequence" ms where ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber);
+
+
+
+INSERT INTO public.error_count_9_3
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 and ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber AND e.errorstatus IS TRUE AND (e."ApprovedInd" IS NOT TRUE OR e."CannotBeCorrected" IS NOT NULL OR e."RemovedByPolicy" IS NOT NULL OR e."FixDate" IS NOT NULL) AND e."CreateDate"::date < (CURRENT_DATE - (((( SELECT g."ruleValue"::integer AS "ruleValue"
+
+           FROM globals g
+
+          WHERE g."globalId" = 12)) || ' days'::text)::interval))
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_9_7
+
+
+
+delete from public.error_count_9_7 where "MonitoringSequenceGenId" in (select ms."MonitoringSequenceGenId" from dbo."MonitoringSequence" ms where ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber);
+
+
+
+INSERT INTO public.error_count_9_7
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 and ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber AND e."ApprovedInd" IS NULL AND e."CannotBeCorrected" IS NULL AND e."RemovedByPolicy" IS NULL AND e."FixDate" IS NULL AND e.errorstatus IS TRUE AND e."CreateDate"::date < (CURRENT_DATE - (((( SELECT g."ruleValue"::integer AS "ruleValue"
+
+           FROM globals g
+
+          WHERE g."globalId" = 12)) || ' days'::text)::interval))
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_es
+
+
+
+delete from public.error_count_es where "MonitoringSequenceGenId" in (select ms."MonitoringSequenceGenId" from dbo."MonitoringSequence" ms where ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber);
+
+
+
+INSERT INTO public.error_count_es
+
+("MonitoringSequenceGenId", count)
+
+(
+
+  SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 and ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber AND e."ApprovedInd" IS FALSE
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_es_appeals
+
+
+
+delete from public.error_count_es_appeals where "MonitoringSequenceGenId" in (select ms."MonitoringSequenceGenId" from dbo."MonitoringSequence" ms where ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber);
+
+
+
+INSERT INTO public.error_count_es_appeals
+
+("MonitoringSequenceGenId", count)
+
+(
+
+ SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+     JOIN dbo."Appeals" a ON e."ErrorGenId" = a.errorid
+
+  WHERE a."AppealDenyDate" IS NOT NULL and ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_queue
+
+
+
+delete from public.error_count_queue where "MonitoringSequenceGenId" in (select ms."MonitoringSequenceGenId" from dbo."MonitoringSequence" ms where ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber);
+
+
+
+INSERT INTO public.error_count_queue
+
+("MonitoringSequenceGenId", "CreateDate")
+
+(
+
+ SELECT e."MonitoringSequenceGenId",
+
+    max(e."CreateDate") AS "CreateDate"
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 and ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber AND e."RemovedByPolicy" IS NULL AND e."CannotBeCorrected" IS NULL AND e."FixDate" IS NULL AND e."ApprovedInd" IS NULL AND e.errorstatus IS TRUE
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+-- error_count_su_4
+
+
+
+delete from public.error_count_su_4;
+
+
+
+INSERT INTO public.error_count_su_4
+
+("MonitoringSequenceGenId", count)
+
+(
+
+SELECT e."MonitoringSequenceGenId",
+
+    count(*) AS count
+
+   FROM dbo."MonitoringSequence" ms join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+  WHERE e."ErrorCategoryGenId" = 2 and ms."ApplicantGenId" = _casenumber and ms."ApplicationSequence" = _casesequencenumber AND e."ApprovedInd" IS NOT TRUE AND e."CannotBeCorrected" IS NULL AND e."FixDate" IS NULL AND e.errorstatus IS TRUE AND e."RemovedByPolicy" IS NULL AND e."CreateDate" > (CURRENT_DATE - (((( SELECT g."ruleValue"::integer AS "ruleValue"
+
+           FROM globals g
+
+          WHERE g."globalId" = 8)) || ' days'::text)::interval))
+
+  GROUP BY e."MonitoringSequenceGenId"
+
+);
+
+
+
+end if;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object(
+
+'data',coalesce(result,'[]')
+
+)),'[]');
+
+
+
+ END;
+
+ $function$
+

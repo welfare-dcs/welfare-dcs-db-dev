@@ -1,0 +1,37 @@
+CREATE OR REPLACE FUNCTION public.errorcategoryfilter()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+rec."ErrorCategoryGenId" as "id"
+
+, rec."ErrorCategoryDescription" as "label"
+
+from dbo."ref_ErrorCategory" rec
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

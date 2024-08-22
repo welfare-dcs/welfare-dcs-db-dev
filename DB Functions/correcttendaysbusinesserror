@@ -1,0 +1,49 @@
+CREATE OR REPLACE FUNCTION public.correcttendaysbusinesserror(_monitoringsequencegenid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+   /*
+
+   update dbo."Error" set "FixDate"=now(), "UpdateDate"=now(), "UpdatedBy"=0, "RemovedByPolicy"=now(), "CannotBeCorrected"=now(),
+
+"Comment"='Error Unmarked By OCR.', "OcrMarked"='Y', errorstatus=false
+
+where "ErrorTypeGenId"=_errortypegenid and  "ErrorGenId"=_errorgenid and errorstatus=true;
+
+*/
+
+   update dbo."Error" set "UpdateDate"=now(), "UpdatedBy"=0, 
+
+   --"RemovedByPolicy"=now(), "CannotBeCorrected"=now(),"FixDate"=now(), 
+
+"Comment"='Error Unmarked By OCR.', "OcrMarked"='Y', errorstatus=false
+
+where errorstatus=true
+
+and "MonitoringSequenceGenId" = _monitoringsequencegenid and "ErrorTypeGenId" in (1,58,32,110,25,40,53,24,45,48);
+
+
+
+RETURN COALESCE(json_build_array(json_build_object(
+
+'data',coalesce(result,'[]')
+
+)),'[]');
+
+
+
+ END;
+
+ $function$
+

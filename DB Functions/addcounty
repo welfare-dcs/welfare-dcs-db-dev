@@ -1,0 +1,37 @@
+CREATE OR REPLACE FUNCTION public.addcounty(_eligibleofficeid integer, _intakeagencycode character varying, _countygenid character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+insert into dbo."IntakeAgency_County"   ("IntakeAgencyCode", "CountyGenId",eligibleofficeid)VALUES(_intakeagencycode ,_countygenid,_eligibleofficeid );
+
+
+
+RETURN COALESCE(json_build_array(json_build_object(
+
+'data',coalesce(result,'[]')
+
+)),'[]');
+
+
+
+
+
+
+
+ END;
+
+
+
+ $function$
+

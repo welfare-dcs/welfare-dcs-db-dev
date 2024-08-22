@@ -1,0 +1,63 @@
+CREATE OR REPLACE FUNCTION public.updateligibilityofficounty(_eligibilityofficerid_lcl character varying, _step character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+DECLARE _id INTEGER;
+
+declare _ccount integer;
+
+begin
+
+
+
+    if _step = 'front' then
+
+      FOREACH _id IN ARRAY _eligibilityofficerid_lcl::int[]
+
+      LOOP
+
+        update dbo."ref_County"  set usercount = (select usercount from dbo."ref_County" where "CountyGenId" = _id)+1 where "CountyGenId" = _id;
+
+      END LOOP;
+
+    
+
+    end if;
+
+
+
+     if _step = 'back' then
+
+      FOREACH _id IN ARRAY _eligibilityofficerid_lcl::int[]
+
+      loop
+
+        select usercount from dbo."ref_County" where "CountyGenId" = _id into _ccount;
+
+        if coalesce(_ccount,0) = 0 then
+
+        update dbo."ref_County"  set usercount = (select usercount from dbo."ref_County" where "CountyGenId" = _id)-1 where "CountyGenId" = _id;
+
+       end if;
+
+      END LOOP;
+
+    
+
+    end if;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

@@ -1,0 +1,55 @@
+CREATE OR REPLACE FUNCTION public.addrelatedcasebaseondata(_applicantgenid integer, _applicationsequence integer, _mindatetime timestamp without time zone, _maxdatetime timestamp without time zone)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+DECLARE result_1 json;
+
+DECLARE result_2 json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+acr.*
+
+from public.ais_case_relation acr where acr.originalcasegenid = _applicantgenid and acr.originalcaseapplicationsequence = _applicationsequence)t1 into result_1;
+
+
+
+select Json_agg(row_to_json(t2)) from (
+
+select acr2.* 
+
+from public.ais_case_relation acr 
+
+join public.ais_case_relation acr2 on acr.relatedcasegenid = acr2.originalcasegenid and acr.relatedcaseapplicationsequence = acr2.originalcaseapplicationsequence 
+
+where acr.originalcasegenid = _applicantgenid and acr.originalcaseapplicationsequence = _applicationsequence
+
+)t2 into result_2;
+
+
+
+select coalesce(result_1::jsonb,'[]') || coalesce(result_2::jsonb,'[]') into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

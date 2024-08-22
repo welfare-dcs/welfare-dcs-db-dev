@@ -1,0 +1,193 @@
+CREATE OR REPLACE FUNCTION public.monitorstatusreporttable(_offset integer, _limit integer, _casenumber character varying, _eligibilityoffice character varying, _county character varying, _startdate character varying, _enddate character varying, _sortcolumn character varying, _sortorder character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t2)) from (
+
+select t1.elibilityoffice,Json_agg(row_to_json(t1)) as "data" from (
+
+select
+
+initcap(t.county) as "county"
+
+, t.elibilityoffice as "elibilityoffice"
+
+, sum(t.cases_scanned) as "cases_scanned"
+
+, sum(t.cases_monitored) as "cases_monitored"
+
+, sum(t.total_cases_with_error) as "total_cases_with_error"
+
+, sum(t.total_error) as "total_error"
+
+, sum(t.fixed_error) as "fixed_error"
+
+, sum(t.case_with_remaining_error) as "case_with_remaining_error"
+
+, sum(t.remaining_error) as "remaining_error"
+
+, case when sum(t.cases_monitored) != 0 and sum(t.cases_scanned) != 0
+
+then ROUND(sum(t.cases_monitored) / sum(t.cases_scanned) * 100, 2)
+
+else '0' end
+
+as "percent_monitored"
+
+, case when sum(t.total_cases_with_error) != 0 and sum(t.cases_monitored) != 0
+
+then ROUND(sum(t.total_cases_with_error) / sum(t.cases_monitored) * 100, 2)
+
+else '0' end
+
+as "percent_cases_with_error"
+
+, case when sum(t.total_error) != 0 and sum(t.cases_monitored) != 0
+
+then ROUND(sum(t.total_error) / sum(t.cases_monitored) * 100, 2)
+
+else '0' end
+
+as "percent_error"
+
+, case when sum(t.fixed_error) != 0 and sum(t.total_error) != 0
+
+then ROUND(sum(t.fixed_error) / sum(t.total_error) * 100, 2)
+
+else '0' end
+
+as "percent_fixed_error"
+
+, case when sum(t.case_with_remaining_error) != 0 and sum(t.cases_monitored) != 0
+
+then ROUND(sum(t.case_with_remaining_error) / sum(t.cases_monitored) * 100, 2)
+
+else '0' end
+
+as "percent_case_with_remaining_error"
+
+,case when sum(t.remaining_error) != 0 and sum(t.total_error) != 0
+
+then ROUND(sum(t.remaining_error) / sum(t.total_error) * 100, 2)
+
+else '0' end
+
+as "percent_remaining_error"
+
+from (
+
+select
+
+trim(lower(rc."CountyName")) as "county"
+
+, teo.description as "elibilityoffice"
+
+, count(ms."MonitoringSequenceGenId") as "cases_scanned"
+
+, case when ms."ApprovedInd" is not null then
+
+ count(ms."MonitoringSequenceGenId")
+
+ else '0' end as "cases_monitored"
+
+, case when (e."StateApprovedInd" is true or e."ApprovedInd" is true) and e."DeleteDate" is null then
+
+ count(distinct(ms."MonitoringSequenceGenId"))
+
+ else '0' end as "total_cases_with_error"
+
+, case when (e."StateApprovedInd" is true or e."ApprovedInd" is true) and e."DeleteDate" is null then
+
+ count(*)
+
+ else '0' end as "total_error"
+
+, case when (e."StateApprovedInd" is true or e."ApprovedInd" is true) and e."DeleteDate" is null and e."FixDate" is not null then
+
+ count(*)
+
+ else '0' end as "fixed_error"
+
+, case when (e."StateApprovedInd" is true or e."ApprovedInd" is true) and e."DeleteDate" is null and e."FixDate" is null then
+
+ count(*)
+
+ else '0' end as "case_with_remaining_error"
+
+, case when (e."StateApprovedInd" is true or e."ApprovedInd" is true) and e."DeleteDate" is null and e."FixDate" is null then
+
+ count(*)
+
+ else '0' end as "remaining_error"
+
+from dbo."MonitoringSequence" ms
+
+inner join dbo."Applicant" a on ms."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."ref_County" rc on a."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+where
+
+teo.status = 'A'
+
+--and teo.id = 14
+
+--and teo.description = 'GT'
+
+and ms."MonitoringItemGroupGenId" = 1
+
+and ms."DeleteDate" is null
+
+and case when _casenumber = '' then true else concat(ms."ApplicantGenId",concat('-',ms."ApplicationSequence")) = _casenumber end
+
+and case when _eligibilityoffice ='' then true else teo.id = any(_eligibilityoffice::int[]) end
+
+--and case when _county = '' then true else rc."CountyGenId" = any(_county::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else ms."CreatedDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by rc."CountyName",teo.description,ms."ApprovedInd",e."StateApprovedInd",e."DeleteDate",e."FixDate",e."ApprovedInd"
+
+order by county asc
+
+)t
+
+group by t.county,t.elibilityoffice
+
+order by t.county asc
+
+)t1
+
+group by t1.elibilityoffice
+
+order by t1.elibilityoffice asc
+
+)t2 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

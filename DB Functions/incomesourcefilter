@@ -1,0 +1,37 @@
+CREATE OR REPLACE FUNCTION public.incomesourcefilter()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select distinct 
+
+lower(fi."IncomeSourceDescription") as "id"
+
+,fi."IncomeSourceDescription" as "label"
+
+from dbo."FamilyIncome" fi where fi."IncomeSourceDescription" is not null
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

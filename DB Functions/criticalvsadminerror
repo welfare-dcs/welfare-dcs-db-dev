@@ -1,0 +1,63 @@
+CREATE OR REPLACE FUNCTION public.criticalvsadminerror()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+begin
+
+
+
+select Json_agg(row_to_json(t)) from (
+
+
+
+select iac."IntakeAgencyCode",rec."ErrorCategoryDescription",count(iac."IntakeAgencyCode") as "count"
+
+from dbo."MonitoringSequence" ms 
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId" 
+
+inner join dbo."Applicant" a on ms."ApplicantGenId" = a."ApplicantGenId"
+
+inner join dbo."Application" a2 on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+inner join dbo."IntakeAgency_County" iac on a."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+join dbo."ref_ErrorCategory" rec on e."ErrorCategoryGenId" = rec."ErrorCategoryGenId" 
+
+where 
+
+a2."TerminationDate" is null
+
+and a2."IsLimitedEligibility" is not true
+
+and e."RemovedByPolicy" is null
+
+and e."CannotBeCorrected" is null
+
+and e."FixDate" is null
+
+and e.errorstatus is true
+
+and e."ApprovedInd" is not true
+
+group by rec."ErrorCategoryDescription",iac."IntakeAgencyCode"
+
+)t  into result;    
+
+    
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

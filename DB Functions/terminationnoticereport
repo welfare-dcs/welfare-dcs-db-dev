@@ -1,0 +1,77 @@
+CREATE OR REPLACE FUNCTION public.terminationnoticereport()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total int4;
+
+
+
+begin
+
+
+
+
+
+select Json_agg(row_to_json(t2)) from (
+
+select t1.id,t1.case_rate,t1.agencymanageremail,t1.current_date,
+
+json_agg(t1.data) as data,messagebody from 
+
+(select t.id,t.case_rate,t.agencymanageremail,TO_CHAR(current_date:: DATE, 'mm-dd-yyyy') as current_date,
+
+json_build_object('applicant_name',concat( a."ApplicantFirstName",' ',a."ApplicantLastName"),
+
+ 'caseid',concat(A."ApplicantGenId",'-',B."ApplicationSequence"), 
+
+'scanstatus',rs."ScanStatusDescription",
+
+'countyname',rc."CountyName") as data,
+
+(SELECT messagebody FROM public.correspondencetemplate where id = 2 limit 1) as messagebody
+
+from teligibilityoffice t 
+
+left join dbo."IntakeAgency_County" iac on iac.eligibleofficeid = t.id
+
+left join dbo."ref_County" rc on rc."CountyGenId"= iac."CountyGenId"
+
+join dbo."Applicant" A on A."CountyGenId" = iac."CountyGenId" 
+
+join dbo."Application" B on A."ApplicantGenId" = B."ApplicantGenId" 
+
+left join dbo."ref_ScanStatus" rs on rs."ScanStatusGenId" = B."ScanStatusGenId"
+
+where B."ScanStatusGenId" = 1 and B."ScanCaseTypeGenId"  in (1,2) and 
+
+age(B."ApplicationSignedDate"::date) = '9 days'
+
+and t.case_rate > 0 
+
+group by t.id,t.case_rate,t.agencymanageremail,current_date,
+
+concat( a."ApplicantFirstName",' ',a."ApplicantLastName"),
+
+concat(A."ApplicantGenId",'-',B."ApplicationSequence"), 
+
+rs."ScanStatusDescription",
+
+rc."CountyName")t1
+
+group by t1.id,t1.case_rate,t1.agencymanageremail,t1.current_date,messagebody)t2 into result;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('data',COALESCE(result,'[]'))),'[]');
+
+
+
+ END;
+
+ $function$
+

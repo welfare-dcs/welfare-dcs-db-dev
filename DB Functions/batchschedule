@@ -1,0 +1,45 @@
+CREATE OR REPLACE FUNCTION public.batchschedule()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+DECLARE result json;
+
+DECLARE _count int4;
+
+begin
+
+
+
+   select count(*) into _count from dbo."ScannedDocs" where "DocumentProcessStatus" in ('UPLOADED','SPLIT_IN_PROCESS');
+
+   
+
+   if _count < 3 then
+
+   UPDATE dbo."ScannedDocs" set "DocumentProcessStatus" = 'UPLOADED' 
+
+where "DocumentId" in (select "DocumentId" from dbo."ScannedDocs"  where "DocumentProcessStatus" = 'YET_TO_START' order by "DocumentId" asc limit 1
+
+
+
+-- and "RemoteSite" in (select description from public.teligibilityoffice 
+
+-- where endtime >= date_part('hour', (SELECT current_timestamp)) 
+
+-- and starttime <= date_part('hour', (SELECT current_timestamp))) limit 1
+
+);
+
+
+
+end if;
+
+
+
+RETURN COALESCE(result,'[]');
+
+end;
+
+$function$
+

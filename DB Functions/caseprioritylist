@@ -1,0 +1,31 @@
+CREATE OR REPLACE FUNCTION public.caseprioritylist()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select rp."PriorityDescription" as "lable",rp."PriorityGenId" as "id"  from dbo."ref_Priority" rp 
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

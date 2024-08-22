@@ -1,0 +1,55 @@
+CREATE OR REPLACE FUNCTION public.correctionqueuetablesub(_monitorsequencegenid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(et.errornumber,concat('.',concat(et.sort,concat(' ', et."Error")))) as "error"
+
+, e."CreateDate"::date as "errordate"
+
+from dbo."Error" e
+
+left join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+where e."MonitoringSequenceGenId" = _monitorsequencegenid
+
+and e."ApprovedInd" is not true
+
+and e."RemovedByPolicy" is null
+
+and e."CannotBeCorrected" is null
+
+and e."FixDate" is null
+
+and e.errorstatus is true
+
+group by error,errordate, et.errornumber, et.sort
+
+order by  et.errornumber asc , et.sort asc
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

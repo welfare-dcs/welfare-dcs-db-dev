@@ -1,0 +1,111 @@
+CREATE OR REPLACE FUNCTION public.appealseligibilityerrorlist(_monitoringsequencegenid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+e."ErrorGenId" as "errorid"
+
+, e."MonitoringSequenceGenId" as "monitorsequencegenid"
+
+, e. "ErrorTypeGenId" as "errortypegenid"
+
+, e."Comment"  as "comment"
+
+,concat('item_',mi."OrderNum")  as "error_type"
+
+, case 
+
+when e."RemovedByPolicy" is not null then true
+
+else false
+
+end as "removedbyoecosl"
+
+, case 
+
+when e."CannotBeCorrected" is not null then true
+
+else false
+
+end as "cannotbecorrected"
+
+, e."FixDate" as "fixdate"
+
+, e."CreateDate" as "createddate" 
+
+, e."CreatedBy" as "createdby"
+
+, e."ApprovedInd" as "approvedind"
+
+, e."StateApprovedInd" as "stateapprovedind" 
+
+, e."UpdateDate" as "updateddate"
+
+, e."UpdatedBy" as "updatedby"
+
+, rec."ErrorCategoryGenId" as "errorcategorygenid"
+
+, case when e."ApprovedInd" is true then true end as "approvecorrection"
+
+, case when e."ApprovedInd" is false then true end as "deniedcorrection"
+
+, case when a."AppealAcceptDate" is not null then true end as "acceptappeal"
+
+, case when a."AppealDenyDate" is not null then true end as "denyappeal"
+
+, a."AppealGenId" as "appealgenid"
+
+, a."AppealAcceptDate" as "appealacceptdate"
+
+, a."AppealDenyDate" as "appealdenydate"
+
+, a2."TerminationDate" as "terminationdate"
+
+, e.errorstatus 
+
+from dbo."Appeals" a 
+
+inner join dbo."Error" e on a.errorid = e."ErrorGenId" 
+
+inner join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+inner join dbo."ref_ErrorCategory" rec on et."errorCategoryGenId" = rec."ErrorCategoryGenId"
+
+join dbo."MonitoringItem" mi on et."MonitoringItemGenId" = mi."MonitoringItemGenId" 
+
+inner join dbo."MonitoringSequence" ms on e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" 
+
+inner join dbo."Application" a2 on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence" 
+
+where e."MonitoringSequenceGenId" = _monitoringsequencegenid
+
+and e.errorstatus is true
+
+order by e.id asc
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

@@ -1,0 +1,35 @@
+CREATE OR REPLACE FUNCTION public.errordefinitionsactiveerror()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select * from dbo."MonitoringItem" mi where mi."MonitoringItemGroupGenId" = 1 
+
+and  (mi."RetireDate" is null or mi."RetireDate" AT time zone 'EST' >= current_timestamp AT time zone 'EST')
+
+order by mi."OrderNum"
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

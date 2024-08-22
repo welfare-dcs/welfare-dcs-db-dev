@@ -1,0 +1,37 @@
+CREATE OR REPLACE FUNCTION public.ocrbatchid()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+DECLARE result json;
+
+begin
+
+
+
+select Json_agg(row_to_json(t)) from (select ab."ApplicantBatchGenId",a."ApplicantGenId", a."ApplicationSequence",
+
+      array_to_string(array_agg(distinct dp.conversion_status),',') as status,ms."ReviewedBy"  
+
+from dbo."ApplicantBatch" ab 
+
+left join dbo."Application" a on ab."ApplicantGenId" = a."ApplicantGenId" and ab."ApplicationSequence" = a."ApplicationSequence"
+
+left join dbo."MonitoringSequence" ms on ms."ApplicantGenId" = a."ApplicantGenId" and ms."ApplicationSequence" = a."ApplicationSequence"
+
+left join dbo."Document" d on ab."ApplicantBatchGenId" = d."ApplicantBatchGenId" 
+
+left join dbo."DocumentPage" dp on d."DocumentGenId" = dp."DocumentGenId" 
+
+where ab.mappingrequired is true
+
+group by a."ApplicantGenId", a."ApplicationSequence",ab."ApplicantBatchGenId",ms."ReviewedBy"  order by a."ApplicantGenId" desc limit 6)t into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+end;
+
+$function$
+

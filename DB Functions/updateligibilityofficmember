@@ -1,0 +1,65 @@
+CREATE OR REPLACE FUNCTION public.updateligibilityofficmember()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+DECLARE _id INTEGER;
+
+DECLARE  TABLE_RECORD RECORD;
+
+
+
+begin
+
+
+
+           update teligibilityoffice  set usercount = 0;
+
+
+
+              FOR TABLE_RECORD IN select t.id,count(t.id) as total from (
+
+select cast(unnest(array_agg(c)) as int) as id from (
+
+  select cast(unnest(string_to_array(f.eligibilityofficerid,',') ) as int) 
+
+  from public.fssauser f where f.eligibilityofficerid is not null) as dt(c))t group by t.id -- can select required fields only
+
+
+
+
+
+  loop
+
+  
+
+                update teligibilityoffice set usercount = TABLE_RECORD.total where id=TABLE_RECORD.id;
+
+
+
+  END loop;
+
+
+
+      
+
+
+
+       
+
+
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

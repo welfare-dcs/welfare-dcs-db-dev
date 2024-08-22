@@ -1,0 +1,75 @@
+CREATE OR REPLACE FUNCTION public.ocrgetid()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+DECLARE result json;
+
+begin
+
+
+
+   
+
+   select Json_agg(row_to_json(t3)) from (select * from 
+
+(select t."ApplicantGenId", t."ApplicationSequence", t."ApplicantBatchGenId",
+
+array_to_string(array_agg(distinct t.conversion_status),',') as status,
+
+array_to_string(array_agg(distinct t.doc_status),',') as doc_status
+
+from 
+
+(select a."ApplicantGenId", a."ApplicationSequence",dp.conversion_status,
+
+case when s.category is null then 'N' else 'Y' end  as doc_status
+
+, ab."ApplicantBatchGenId" -- added for removing ocr
+
+from dbo."Application" a 
+
+left join dbo."ApplicantBatch" ab 
+
+on a."ApplicantGenId" = ab."ApplicantGenId" and a."ApplicationSequence" = ab."ApplicationSequence"
+
+left join dbo."Document" d on ab."ApplicantBatchGenId" = d."ApplicantBatchGenId" 
+
+left join dbo."DocumentPage" dp on d."DocumentGenId" = dp."DocumentGenId" 
+
+left join scannedimage s on s.documentpagegenid  = dp."DocumentPageGenId" 
+
+inner join dbo."MonitoringSequence" ms on ms."ApplicantGenId" = a."ApplicantGenId" and ms."ApplicationSequence" = a."ApplicationSequence"
+
+--and ms."ReviewedBy" is null
+
+where a."ApplicationSignedDate" is not null
+
+and (a."ApplicationVersionStatusDescription" = 'Active')
+
+and a."ApplicationSignedDate" >= '09/20/2021'::DATE
+
+--and a."ScanCaseTypeGenId" in (1,2,3,312,311,313,429,454,455,456,457,458,459,460,461)
+
+--and a."ScanStatusGenId" = 2
+
+--and coalesce(a."ToBeScannedReason",0) not in (343)
+
+and ab.idmappingstatus = false -- added for removing ocr
+
+ order by a."ApplicantGenId" asc)t 
+
+where t.conversion_status != 'SPLITTED_AS_MULTIPLE_FILE'
+
+group by t."ApplicantGenId", t."ApplicationSequence", t."ApplicantBatchGenId")t2
+
+where t2.doc_status not like '%N%' limit 10)t3 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+end;
+
+$function$
+

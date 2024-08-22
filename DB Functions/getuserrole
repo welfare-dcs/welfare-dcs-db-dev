@@ -1,0 +1,33 @@
+CREATE OR REPLACE FUNCTION public.getuserrole()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+   select Json_agg(t) from 
+
+   ( select r.*,u.usercount
+
+   FROM public.trole r
+
+   left join (SELECT count(f.id) as usercount,f.roleid FROM public.fssauser f group by f.roleid) as u 
+
+   on u.roleid = r.id )t into result;
+
+   
+
+return coalesce(result,'[]');
+
+
+
+end;
+
+$function$
+

@@ -1,0 +1,59 @@
+CREATE OR REPLACE FUNCTION public.up_markerrorapproved(_stateapprovalind integer, _errorgenid integer, _usergenid integer, _approvedind boolean, _reduction boolean, _rescan boolean)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+      
+
+
+
+update dbo."Error" set 
+
+"ApprovedInd" = _approvedind
+
+--, "DeleteDate" = case when _approvedind is false then CURRENT_TIMESTAMP else NULL end
+
+--, "DeletedBy" = case when _approvedind is false then _usergenid else NULL end
+
+, "UpdatedBy" = _usergenid 
+
+, "UpdateDate" = current_timestamp 
+
+, "FineDate" = case when _reduction is true then case when "FineDate" is null then current_timestamp else "FineDate" end else NULL end
+
+, "CreateDate" = case when _rescan is true then "CreateDate" + interval '14 day' else "CreateDate" end
+
+, rescan = case when _rescan is true then true else false end
+
+where "ErrorGenId" = _errorgenid
+
+;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object(
+
+'data',coalesce(result,'[]')
+
+)),'[]');
+
+
+
+
+
+
+
+ END;
+
+
+
+ $function$
+

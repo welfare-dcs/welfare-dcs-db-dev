@@ -1,0 +1,71 @@
+CREATE OR REPLACE FUNCTION public.unscannedcase()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+DECLARE result json;
+
+begin
+
+
+
+select Json_agg(row_to_json(t)) from (
+
+select 
+
+t."ApplicantGenId"
+
+, t."ApplicationSequence"
+
+,t."MonitoringSequenceGenId"
+
+, t.error_indicator
+
+from 
+
+(
+
+select 
+
+a."ApplicantGenId"
+
+, a."ApplicationSequence" 
+
+, (select ms."MonitoringSequenceGenId" from dbo."MonitoringSequence" ms where a."ApplicantGenId" = ms."ApplicantGenId" and a."ApplicationSequence" = ms."ApplicationSequence" and ms."MonitoringSequenceGenId" is not null order by ms."CreatedDate" desc limit 1) 
+
+, a."ApplicationSignedDate" 
+
+, case when (select count(*) from dbo."Error" e where e."MonitoringSequenceGenId" in (select ms."MonitoringSequenceGenId" from dbo."MonitoringSequence" ms where a."ApplicantGenId" = ms."ApplicantGenId" and a."ApplicationSequence" = ms."ApplicationSequence") ) > 0 then true else false end as "error_indicator"
+
+from dbo."Application" a 
+
+where 
+
+a."ApplicationSignedDate" is not null
+
+and a."TerminationDate" is null
+
+and a."ScanStatusGenId" in (1)
+
+and a."ApplicationSignedDate"  <= current_date - 10
+
+order by a."ApplicantGenId" asc, a."ApplicationSequence" asc
+
+)t 
+
+where t."MonitoringSequenceGenId" is not null 
+
+and t.error_indicator is not true 
+
+limit 1
+
+)t into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+end;
+
+$function$
+

@@ -1,0 +1,35 @@
+CREATE OR REPLACE FUNCTION public.updateerror(_errortypegenid integer, _errorgenid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+   update dbo."Error" set "FixDate"=now(), "UpdateDate"=now(), "UpdatedBy"=0, "RemovedByPolicy"=now(), "CannotBeCorrected"=now(),
+
+"Comment"='Error Unmarked By OCR.', "OcrMarked"='Y', errorstatus=false
+
+where "ErrorTypeGenId"=_errortypegenid and  "ErrorGenId"=_errorgenid;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object(
+
+'data',coalesce(result,'[]')
+
+)),'[]');
+
+
+
+ END;
+
+ $function$
+

@@ -1,0 +1,1317 @@
+CREATE OR REPLACE FUNCTION public.notused_casesearch(_offset integer, _limit integer, _firstname character varying, _lastname character varying, _address character varying, _county character varying, _casenumber character varying, _ridnumber character varying, _applicationstartdate character varying, _applicationenddate character varying, _sortcolumn character varying, _sortorder character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+declare total int4;
+
+declare offsetValue int4 = 10;
+
+
+
+begin
+
+
+
+    offsetValue = offsetValue * _offset;
+
+
+
+if _offset = 0 then
+
+
+
+select count(
+
+t1
+
+) from  (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+)t1 into total;
+
+
+
+else
+
+
+
+total = 0;
+
+
+
+end if;
+
+
+
+if _sortcolumn = 'casenumber' then
+
+
+
+if lower(_sortorder) = 'asc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+order by casenumber  asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+order by casenumber desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+elsif _sortcolumn ='firstname' then
+
+
+
+if lower(_sortorder) ='asc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+order by firstname  asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+order by firstname desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+
+
+elsif _sortcolumn ='lastname' then
+
+
+
+if lower(_sortorder) ='asc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+order by lastname  asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+order by lastname desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+elsif _sortcolumn ='address' then
+
+
+
+if lower(_sortorder) ='asc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+order by address  asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+order by address desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+elsif _sortcolumn ='rid' then
+
+
+
+if lower(_sortorder) ='asc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+order by rid  asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+order by rid desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+elsif _sortcolumn ='coapplicantfirstname' then
+
+
+
+if lower(_sortorder) ='asc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+order by coapplicantfirstname  asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+order by coapplicantfirstname desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+elsif _sortcolumn ='coapplicantlastname' then
+
+
+
+if lower(_sortorder) ='asc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+order by coapplicantlastname  asc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+elsif lower(_sortorder) ='desc' then
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+order by coapplicantlastname desc
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+ELSE
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select
+
+concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) as "casenumber",
+
+a."ApplicantFirstName" as "firstname",
+
+a."ApplicantLastName" as "lastname",
+
+adr."AddressLine1" as "address",
+
+i."RIDNumber" as "rid",
+
+i."IndividualFirstName" as "coapplicantfirstname",
+
+i."IndividualLastName" as "coapplicantlastname"
+
+from dbo."Applicant" a
+
+inner join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+inner join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId"
+
+where
+
+case when _casenumber = '' then true else concat(a."ApplicantGenId",concat('-',a2."ApplicationSequence")) = _casenumber end
+
+and case when _firstname = '' then true else lower(a."ApplicantFirstName") like lower(concat('%',concat(_firstname,'%'))) end
+
+and case when _lastname = '' then true else lower(a."ApplicantLastName") like lower(concat('%',concat(_lastname,'%'))) end
+
+and case when _address = '' then true else lower(adr."AddressLine1") = lower(_address) end
+
+and case when _county = '' then true else lower(rc."CountyName") = lower(_county) end
+
+and case when _ridnumber = '' then true else i."RIDNumber" = _ridnumber::bigint end
+
+and case
+
+when _applicationstartdate != '' and _applicationenddate = '' then a2."SubsidyBeginDate"::date = _applicationstartdate::date
+
+when _applicationstartdate = '' and _applicationenddate != '' then a2."SubsidyEndDate"::date = _applicationenddate::date
+
+when _applicationstartdate != '' and _applicationenddate != '' then
+
+a2."SubsidyBeginDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+and
+
+a2."SubsidyEndDate"::date between to_date(_applicationstartdate, 'dd-mm-yyyy') and  to_date(_applicationenddate, 'dd-mm-yyyy')
+
+else true end
+
+group by casenumber,firstname,lastname,address,rid,coapplicantfirstname,coapplicantlastname
+
+limit _limit
+
+offset offsetValue
+
+)t1 into result;
+
+
+
+end if;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('totalCount',total,'data',result)),'[]');
+
+
+
+ END;
+
+ $function$
+

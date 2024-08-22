@@ -1,0 +1,31 @@
+CREATE OR REPLACE FUNCTION public.businessruledropdown()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select rbrg."businessRuleGroup_ID" as "id",rbrg."groupName" as "label" from dbo."ref_BusinessRuleGroup" rbrg
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

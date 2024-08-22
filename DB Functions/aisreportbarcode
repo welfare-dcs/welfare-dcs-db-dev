@@ -1,0 +1,51 @@
+CREATE OR REPLACE FUNCTION public.aisreportbarcode(_applicantgenid integer, _applicationsequence integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+ab.*
+
+, coalesce(ab."IntakeGenId", 1549) as "IntakeGenId" 
+
+, f.username as "UserName"
+
+, f.firstname as "FirstName"
+
+, f.lastname as "LastName"
+
+from dbo."ApplicantBatch" ab 
+
+left join public.fssauser f on ab."UserGenId" = f.id 
+
+where 
+
+ab."ApplicantGenId" = _applicantgenid 
+
+and ab."ApplicationSequence" = _applicationsequence
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

@@ -1,0 +1,45 @@
+CREATE OR REPLACE FUNCTION public.changesscanstatusgenid()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+DECLARE row RECORD;
+
+begin
+
+   
+
+
+
+   FOR row in select sic."DocumentId",sic."ApplicantGenId", sic."ApplicationSequenceId",sic."DocumentProcessStatus",a."ScanStatusGenId" from dbo."ScannedInactiveCase" sic  left join dbo."Application" a on a."ApplicantGenId" = sic."ApplicantGenId" and a."ApplicationSequence" = sic."ApplicationSequenceId" where sic."DocumentProcessStatus" = 'INIT' and a."ScanStatusGenId" = 1 loop
+
+   
+
+      update dbo."Application" set "ScanStatusGenId" =2 where "ApplicantGenId" =row."ApplicantGenId" and "ApplicationSequence" =row."ApplicationSequenceId";
+
+
+
+      update dbo."ScannedInactiveCase" set "DocumentProcessStatus" = 'STATUS_UPDATED' where "ApplicantGenId" =row."ApplicantGenId" and "ApplicationSequenceId" =row."ApplicationSequenceId" and "DocumentId" = row."DocumentId";
+
+              
+
+    END LOOP;
+
+   
+
+    select Json_agg(row_to_json(t1)) from (select * from dbo."ScannedInactiveCase" sic where "DocumentProcessStatus" = 'STATUS_UPDATED' limit 1)t1 into result;
+
+  
+
+   RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

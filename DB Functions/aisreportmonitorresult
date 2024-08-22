@@ -1,0 +1,79 @@
+CREATE OR REPLACE FUNCTION public.aisreportmonitorresult(_applicantgenid integer, _applicationsequence integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+ 
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+ms."MonitoringSequenceGenId"
+
+, ms."ApplicantGenId" 
+
+, ms."ApplicationSequence" 
+
+, concat('Item ',coalesce(mi."OrderNum"),' - ',coalesce(mi."Name", '')) as "MonitoringItem"
+
+, case when et."MonitoringItemGenId" = 10 then 
+
+coalesce(concat(et.errornumber ,'.',lpad(et.sort::text,2,0::text),' ',et."Error"),'') 
+
+else
+
+coalesce(concat(et.errornumber ,'.',et.sort ,' ',et."Error"),'') 
+
+end
+
+as "MonitoringError"
+
+, coalesce(e."Comment", '') as "Notes"
+
+, coalesce(case when e."RemovedByPolicy" is not null then e."RemovedByPolicy" 
+
+when e."CannotBeCorrected" is not null then e."CannotBeCorrected" 
+
+when e."FixDate" is not null then e."FixDate" end)
+
+as "FixDate"
+
+, ms."MonitoringSequence" 
+
+from dbo."MonitoringSequence" ms 
+
+join dbo."Error" e on ms."MonitoringSequenceGenId"  = e."MonitoringSequenceGenId" 
+
+join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId" 
+
+join dbo."MonitoringItem" mi on et."MonitoringItemGenId" = mi."MonitoringItemGenId"
+
+where e."DeleteDate" is null
+
+and ms."ApplicantGenId" = _applicantgenid
+
+and ms."ApplicationSequence" = _applicationsequence
+
+order by  et.errornumber , et.sort asc
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

@@ -1,0 +1,75 @@
+CREATE OR REPLACE FUNCTION public.errorapproachingduedategraph(_intakeagency character varying, _county character varying, _startdate character varying, _enddate character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+select Json_agg(row_to_json(t1)) from (
+
+select count(t.*),t.duedate from (
+
+select
+
+a."ApplicantGenId" 
+
+, a."ApplicationSequence" 
+
+, (a."ApplicationCompleteDate"::date + ('28 day')::interval)::date as "duedate"
+
+from dbo."Application" a
+
+join dbo."Applicant" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+join dbo."IntakeAgency_County" iac on a2."CountyGenId" = iac."CountyGenId"
+
+join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+join dbo."MonitoringSequence" ms on a."ApplicantGenId" = ms."ApplicantGenId" and a."ApplicationSequence" = ms."ApplicationSequence" 
+
+join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId" 
+
+where 
+
+a."ScanStatusGenId" not in (3,9)
+
+and e."ErrorCategoryGenId" = 2
+
+and a."TerminationDate" is null
+
+and a."IsLimitedEligibility" is not true
+
+and a."ApplicationCompleteDate" is not null
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else a2."CountyGenId" = any(_county::int[]) end
+
+and case when _startdate = '' and _enddate = '' then true else (a."ApplicationCompleteDate"::date + ('28 day')::interval)::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy') end
+
+group by a."ApplicantGenId" , a."ApplicationSequence" , a."ApplicationCompleteDate" 
+
+)t
+
+group by t.duedate
+
+)t1
+
+into result;
+
+
+
+RETURN coalesce(result,'[]');
+
+
+
+ END;
+
+ $function$
+

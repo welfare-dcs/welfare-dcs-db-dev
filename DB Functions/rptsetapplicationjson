@@ -1,0 +1,43 @@
+CREATE OR REPLACE FUNCTION public.rptsetapplicationjson()
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+
+DECLARE _row RECORD;
+
+BEGIN
+
+
+
+        FOR _row IN select a."ApplicantGenId",a2."ApplicationSequence",a."ApplicantFirstName",a."ApplicantLastName",adr."AddressLine1" as "address",
+
+             i."RIDNumber" as "rid" from dbo."Applicant" a
+
+          left  join dbo."Address" adr on a."ApplicantGenId" = adr."ApplicantGenId"
+
+          left  join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+          left  join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+          left  join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = a2."ApplicationSequence"
+
+          left join dbo."Individual" i on i."IndividualGenId" = f."IndividualGenId" 
+
+          group by a."ApplicantGenId",a2."ApplicationSequence",a."ApplicantFirstName",a."ApplicantLastName",address,rid
+
+          order by a."ApplicantGenId",a2."ApplicationSequence" LOOP
+
+
+
+      update dbo."Application" set searchjson = row_to_json(_row) where "ApplicantGenId" = _row."ApplicantGenId" and "ApplicationSequence" = _row."ApplicationSequence";
+
+
+
+        END LOOP;
+
+
+
+END;
+
+$function$
+

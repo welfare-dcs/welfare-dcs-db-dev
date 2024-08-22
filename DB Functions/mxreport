@@ -1,0 +1,69 @@
+CREATE OR REPLACE FUNCTION public.mxreport()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+
+
+select jsonb_agg(row_to_json(t) ) from
+
+(select 
+
+a."ApplicationSignedDate"::DAte
+
+, rss."ScanStatusDescription"
+
+, concat(a."ApplicantGenId",'-',a."ApplicationSequence") as "Case Number",rc."CountyName" 
+
+,concat("ApplicantLastName",' ', "ApplicantFirstName") as "Applicant Name"
+
+from
+
+dbo."Application" a
+
+inner join dbo."Applicant" a2 on a."ApplicantGenId" = a2."ApplicantGenId"
+
+inner join dbo."IntakeAgency_County" iac on a2."CountyGenId" = iac."CountyGenId"
+
+inner join dbo."ref_County" rc on iac."CountyGenId" = rc."CountyGenId" 
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+left join dbo."ref_ScanStatus" rss on rss."ScanStatusGenId"= a."ScanStatusGenId"
+
+where
+
+a."ApplicationSignedDate"::date >= '10-01-2021' and a."ApplicationSignedDate"::date <= '12-12-2021'
+
+and a2."CountyGenId" in (5,6,12,27,29,30,32,33,34,41,48,49,54,55,67,73,80)
+
+and a."ScanStatusGenId" = 9 
+
+group by a."ApplicationSignedDate"::DAte,rss."ScanStatusDescription","Case Number",rc."CountyName",
+
+concat("ApplicantLastName",' ', "ApplicantFirstName") 
+
+order by a."ApplicationSignedDate"::DAte asc)t into result;
+
+
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

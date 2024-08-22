@@ -1,0 +1,963 @@
+CREATE OR REPLACE FUNCTION public.cmd_processnewapplicantbatch(p_applicantgenid integer, p_applicationsequence integer)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+
+   DECLARE v_DocumentBatchGenId int;
+
+         v_DaysToScan int;
+
+         v_AllowedToReviewDate timestamp(3);
+
+         v_TriggerMonitoringInd BOOLEAN;
+
+         v_MonitoringSequenceGenId   INT;
+
+         v_MonitoringSequence      INT;
+
+         v_Order                  INT;
+
+         v_ApplicantGenId         INT;
+
+         v_ApplicationSequence      INT;
+
+         curMS refcursor; 
+
+         upCur refcursor;
+
+   declare total_count int4:=0;
+
+   declare total_monitor_count int4:=0;
+
+   BEGIN
+
+
+
+--   SELECT g."DaysToScanCase" INTO v_DaysToScan
+
+--   FROM dbo."Globals" g;
+
+   SELECT g."ruleValue" INTO v_DaysToScan
+
+   FROM public.globals g WHERE "globalId" = 1;
+
+
+
+--   SELECT db."DocumentBatchGenId" INTO v_DocumentBatchGenId
+
+--   FROM dbo."DocumentBatch" db 
+
+--   WHERE db."BatchID" = p_BatchId;
+
+
+
+   drop table if exists tmp_MonitoringSequence;
+
+
+
+   select 
+
+      count(*)
+
+         FROM
+
+            dbo."DocumentBatch" db2
+
+         JOIN
+
+            dbo."ApplicantBatch" ab2 ON
+
+               db2."DocumentBatchGenId" = ab2."DocumentBatchGenId"
+
+         WHERE
+
+            ab2."ApplicantGenId" = p_applicantgenid
+
+         AND 
+
+            ab2."ApplicationSequence" = p_applicationsequence into total_count;
+
+
+
+   if total_count > 0 then 
+
+
+
+   create table tmp_MonitoringSequence as
+
+   select
+
+      ab."ApplicantGenId",
+
+      ab."ApplicationSequence",
+
+      ms."MonitoringSequenceGenId",
+
+      ms."MonitoringSequence",
+
+      ms."ApprovedInd"
+
+   FROM
+
+      (   select 
+
+            DISTINCT
+
+            ab2."ApplicantGenId" as "ApplicantGenId",
+
+            ab2."ApplicationSequence" as "ApplicationSequence"
+
+         FROM
+
+            dbo."DocumentBatch" db2
+
+         JOIN
+
+            dbo."ApplicantBatch" ab2 ON
+
+               db2."DocumentBatchGenId" = ab2."DocumentBatchGenId"
+
+         WHERE
+
+            ab2."ApplicantGenId" = p_applicantgenid
+
+         AND 
+
+            ab2."ApplicationSequence" = p_applicationsequence
+
+      ) ab
+
+   LEFT JOIN
+
+      dbo."MonitoringSequence" ms ON
+
+         ms."ApplicantGenId" = ab."ApplicantGenId"
+
+      AND
+
+         ms."ApplicationSequence" = ab."ApplicationSequence"
+
+      AND
+
+         ms."MonitoringItemGroupGenId" = 1;
+
+--      AND
+
+--         ms."MonitoringSequence" = (
+
+--            SELECT
+
+--               MAX(ms2."MonitoringSequence")
+
+--            FROM
+
+--               dbo."MonitoringSequence" ms2
+
+--            WHERE
+
+--               ms2."ApplicantGenId" = ms."ApplicantGenId"
+
+--            AND
+
+--               ms2."ApplicationSequence" = ms."ApplicationSequence"
+
+--            AND
+
+--               ms2."MonitoringItemGroupGenId" = ms."MonitoringItemGroupGenId"
+
+--         );
+
+      
+
+      else
+
+      
+
+      create table tmp_MonitoringSequence("ApplicantGenId" int8 null,
+
+   "ApplicationSequence" int8 null,
+
+      "MonitoringSequenceGenId" int8 null,
+
+      "MonitoringSequence" int8 null,
+
+      "ApprovedInd" boolean null );
+
+      
+
+      select count(*) from dbo."MonitoringSequence" ms where ms."ApplicantGenId" = p_applicantgenid and ms."ApplicationSequence" = p_applicationsequence into total_monitor_count;
+
+   
+
+      if total_monitor_count = 0 then
+
+
+
+      insert into tmp_monitoringsequence ("ApplicantGenId","ApplicationSequence","MonitoringSequenceGenId","MonitoringSequence","ApprovedInd")
+
+      values (p_applicantgenid ,p_applicationsequence ,null ,null ,null);
+
+      
+
+      end if;
+
+   
+
+      end if;
+
+
+
+   /*************************************************
+
+    * BEGIN 1) Eligibility Errors with Updates
+
+    *************************************************/
+
+   SELECT
+
+    COALESCE(MAX("Order"), 0) + 1 INTO v_Order
+
+   FROM
+
+      dbo."MonitoringSequence"
+
+   WHERE
+
+      "ApprovedInd" IS NULL
+
+   AND
+
+      "MonitoringPriorityGenId" = 1
+
+   AND
+
+      "MonitoringItemGroupGenId" = 1;
+
+
+
+   OPEN curMS FOR
+
+      SELECT
+
+         "MonitoringSequenceGenId"
+
+      FROM
+
+         tmp_MonitoringSequence
+
+      WHERE
+
+         "ApprovedInd" = false;
+
+      
+
+   FETCH NEXT FROM curMS INTO v_MonitoringSequenceGenId;
+
+   
+
+WHILE FOUND
+
+   loop
+
+   
+
+      UPDATE dbo."MonitoringSequence" SET
+
+         "Order" = v_Order,
+
+         "ApprovedInd" = NULL,
+
+         "MonitoringPriorityGenId" = 1,
+
+         "UpdatedDate" = NOW(),
+
+         "UpdatedBy" = NULL
+
+      WHERE
+
+         "MonitoringSequenceGenId" = v_MonitoringSequenceGenId;
+
+
+
+      v_Order := v_Order + 1;
+
+   
+
+      FETCH NEXT FROM curMS INTO v_MonitoringSequenceGenId;
+
+   
+
+--      exit when not found;
+
+   
+
+   END LOOP;
+
+
+
+   CLOSE curMS;
+
+
+
+   /*************************************************
+
+    * END 1) Eligibility Errors with Updates
+
+    *************************************************/
+
+
+
+   /*************************************************
+
+    * BEGIN 3) Recerts
+
+    * INSERT RECERTS FIRST TO PREVENT DOUBLE INSERTION OF NEW SEQUENCES
+
+    *************************************************/
+
+   SELECT
+
+    COALESCE(MAX("Order"), 0) + 1 INTO v_Order
+
+   FROM
+
+      dbo."MonitoringSequence"
+
+   WHERE
+
+      "ApprovedInd" IS NULL
+
+   AND
+
+      "MonitoringPriorityGenId" = 3
+
+   AND
+
+      "MonitoringItemGroupGenId" = 1;
+
+
+
+   OPEN curMS FOR
+
+      SELECT
+
+         tms."ApplicantGenId",
+
+         tms."ApplicationSequence"
+
+      FROM
+
+         tmp_MonitoringSequence tms
+
+      WHERE
+
+         tms."MonitoringSequenceGenId" IS NULL
+
+      AND
+
+         EXISTS (
+
+            SELECT
+
+               *
+
+            FROM
+
+               dbo."MonitoringSequence" ms2
+
+            WHERE
+
+               ms2."ApplicantGenId" = tms."ApplicantGenId"
+
+         );
+
+
+
+   FETCH NEXT FROM curMS INTO v_ApplicantGenId, v_ApplicationSequence;
+
+
+
+WHILE FOUND
+
+   LOOP
+
+      INSERT INTO dbo."MonitoringSequence" (
+
+         "ApplicantGenId",
+
+         "ApplicationSequence",
+
+         "MonitoringSequence",
+
+         "MonitoringPriorityGenId",
+
+         "Order",
+
+         "MonitoringItemGroupGenId",
+
+         "CreatedDate",
+
+         "CreatedBy",
+
+         "UpdatedDate",
+
+         "UpdatedBy"
+
+      ) VALUES (
+
+         v_ApplicantGenId,
+
+         v_ApplicationSequence,
+
+         1,
+
+         3,
+
+         v_Order,
+
+         1,
+
+         NOW(),
+
+         NULL,
+
+         NOW(),
+
+         NULL
+
+      );
+
+
+
+        ----Insert cases into sample table
+
+--      INSERT INTO MonitoringSample(ApplicantGenId, ApplicationSequence, SampleInd)
+
+--      SELECT v_ApplicantGenId, v_ApplicationSequence, NULL
+
+--      WHERE NOT EXISTS(SELECT *
+
+--                  FROM MonitoringSample
+
+--                  WHERE ApplicantGenId = v_ApplicantGenId
+
+--                  AND ApplicationSequence = v_ApplicationSequence);
+
+--
+
+      v_Order := v_Order + 1;
+
+      FETCH NEXT FROM curMS INTO v_ApplicantGenId, v_ApplicationSequence;
+
+--      EXIT WHEN NOT FOUND;
+
+   END LOOP;
+
+
+
+   CLOSE curMS;
+
+
+
+   /*************************************************
+
+    * END 3) Recerts
+
+    *************************************************/
+
+
+
+   /*************************************************
+
+    * BEGIN 2) New
+
+    *************************************************/
+
+   SELECT
+
+       COALESCE(MAX("Order"), 0) + 1 INTO v_Order
+
+   FROM
+
+      dbo."MonitoringSequence"
+
+   WHERE
+
+      "ApprovedInd" IS NULL
+
+   AND
+
+      "MonitoringPriorityGenId" = 2
+
+   AND
+
+      "MonitoringItemGroupGenId" = 1;
+
+
+
+   OPEN curMS FOR
+
+      SELECT
+
+         tms."ApplicantGenId",
+
+         tms."ApplicationSequence"
+
+      FROM
+
+         tmp_MonitoringSequence tms
+
+      WHERE
+
+         tms."MonitoringSequenceGenId" IS NULL
+
+      AND
+
+         NOT EXISTS (
+
+            SELECT
+
+               *
+
+            FROM
+
+               dbo."MonitoringSequence" ms2
+
+            WHERE
+
+               ms2."ApplicantGenId" = tms."ApplicantGenId"
+
+         );
+
+
+
+   FETCH NEXT FROM curMS INTO v_ApplicantGenId, v_ApplicationSequence;
+
+
+
+WHILE FOUND 
+
+      Loop
+
+      if (Select "ScanStatusGenId" from dbo."Application" where "ApplicantGenId" = v_ApplicantGenId and "ApplicationSequence" = v_ApplicationSequence) = 10
+
+         Then
+
+         INSERT INTO dbo."MonitoringSequence" (
+
+            "ApplicantGenId",
+
+            "ApplicationSequence",
+
+            "MonitoringSequence",
+
+            "MonitoringPriorityGenId",
+
+            "Order",
+
+            "MonitoringItemGroupGenId",
+
+            "CreatedDate",
+
+            "CreatedBy",
+
+            "UpdatedDate",
+
+            "UpdatedBy",
+
+            "AllowedToReviewDate"
+
+         ) VALUES (
+
+            v_ApplicantGenId,
+
+            v_ApplicationSequence,
+
+            1,
+
+            2,
+
+            v_Order,
+
+            1,
+
+            NOW(),
+
+            NULL,
+
+            NOW(),
+
+            NULL,
+
+            NULL
+
+         );
+
+      Else
+
+         INSERT INTO dbo."MonitoringSequence" (
+
+            "ApplicantGenId",
+
+            "ApplicationSequence",
+
+            "MonitoringSequence",
+
+            "MonitoringPriorityGenId",
+
+            "Order",
+
+            "MonitoringItemGroupGenId",
+
+            "CreatedDate",
+
+            "CreatedBy",
+
+            "UpdatedDate",
+
+            "UpdatedBy"
+
+         ) VALUES (
+
+            v_ApplicantGenId,
+
+            v_ApplicationSequence,
+
+            1,
+
+            2,
+
+            v_Order,
+
+            1,
+
+            NOW(),
+
+            NULL,
+
+            NOW(),
+
+            NULL
+
+         );
+
+         End if;
+
+
+
+        ----Insert cases into sample table
+
+--      INSERT INTO MonitoringSample(ApplicantGenId, ApplicationSequence, SampleInd)
+
+--      SELECT v_ApplicantGenId, v_ApplicationSequence, NULL
+
+--      WHERE NOT EXISTS(SELECT *
+
+--                  FROM MonitoringSample
+
+--                  WHERE ApplicantGenId = v_ApplicantGenId
+
+--                  AND ApplicationSequence = v_ApplicationSequence);
+
+
+
+      v_Order := v_Order + 1;
+
+      FETCH NEXT FROM curMS INTO v_ApplicantGenId, v_ApplicationSequence;
+
+--      EXIT WHEN NOT FOUND;
+
+      End Loop;
+
+
+
+   CLOSE curMS;
+
+
+
+   /*************************************************
+
+    * END 2) New
+
+    *************************************************/
+
+
+
+   /*************************************************
+
+    * BEGIN 4) Updates
+
+    *************************************************/
+
+   SELECT
+
+    COALESCE(MAX("Order"), 0) + 1 INTO v_Order
+
+   FROM
+
+      dbo."MonitoringSequence"
+
+   WHERE
+
+      "ApprovedInd" IS NULL
+
+   AND
+
+      "MonitoringPriorityGenId" = 4
+
+   AND
+
+      "MonitoringItemGroupGenId" = 1;
+
+
+
+   OPEN curMS FOR
+
+      SELECT
+
+         tms."ApplicantGenId",
+
+         tms."ApplicationSequence",
+
+         tms."MonitoringSequence"
+
+      FROM
+
+         tmp_MonitoringSequence tms 
+
+      JOIN
+
+         dbo."Application" a ON
+
+            tms."ApplicantGenId" = a."ApplicantGenId"
+
+         AND
+
+            tms."ApplicationSequence" = a."ApplicationSequence"
+
+      LEFT JOIN
+
+         dbo."ref_ToBeScannedReason" sr ON
+
+            a."ToBeScannedReason" = sr."ToBeScannedReasonGenId"
+
+      WHERE
+
+         tms."ApprovedInd" = true
+
+      AND
+
+         a."ScanEligibilityDate" IS NOT NULL
+
+      AND
+
+         sr."TriggerMonitoringInd" = true;
+
+      
+
+   FETCH NEXT FROM curMS INTO v_ApplicantGenId, v_ApplicationSequence, v_MonitoringSequence;
+
+
+
+   WHILE FOUND 
+
+   LOOP
+
+      INSERT INTO dbo."MonitoringSequence" (
+
+         "ApplicantGenId",
+
+         "ApplicationSequence",
+
+         "MonitoringSequence",
+
+         "MonitoringPriorityGenId",
+
+         "Order",
+
+         "MonitoringItemGroupGenId",
+
+         "CreatedDate",
+
+         "CreatedBy",
+
+         "UpdatedDate",
+
+         "UpdatedBy"
+
+      ) VALUES (
+
+         v_ApplicantGenId,
+
+         v_ApplicationSequence,
+
+         v_MonitoringSequence + 1,
+
+         4,
+
+         v_Order,
+
+         1,
+
+         NOW(),
+
+         NULL,
+
+         NOW(),
+
+         NULL
+
+      );
+
+
+
+      v_Order := v_Order + 1;
+
+      FETCH NEXT FROM curMS INTO v_ApplicantGenId, v_ApplicationSequence, v_MonitoringSequence;
+
+--      EXIT WHEN NOT FOUND;
+
+   END LOOP;
+
+
+
+   CLOSE curMS;
+
+   /*************************************************
+
+    * END 4) Updates
+
+    *************************************************/
+
+
+
+   /********************************************
+
+    *SET ScanEligibilityDate and ScanAdminDate TO NULL WHEN 
+
+   A new images are received for the application
+
+   *********************************************/
+
+   OPEN upCur FOR
+
+   SELECT "ApplicantGenId", "ApplicationSequence" 
+
+   FROM tmp_MonitoringSequence;
+
+
+
+   FETCH NEXT FROM upCur INTO v_ApplicantGenId, v_ApplicationSequence;
+
+
+
+   WHILE FOUND 
+
+   LOOP
+
+
+
+      -- To fix bug when cases dont show up in the queue even after 21 days of signed date
+
+      SELECT COALESCE(rs."TriggerMonitoringInd",false) INTO v_TriggerMonitoringInd
+
+      FROM 
+
+      dbo."Application" a
+
+      LEFT JOIN dbo."ref_ToBeScannedReason" rs on rs."ToBeScannedReasonGenId" = a."ToBeScannedReason"
+
+      WHERE 
+
+         "ApplicantGenId" = v_ApplicantGenId
+
+         AND 
+
+         "ApplicationSequence" = v_ApplicationSequence;
+
+
+
+      IF(v_TriggerMonitoringInd = true)
+
+      THEN
+
+         
+
+         SELECT v_DaysToScan * INTERVAL '1 day' + "ScanEligibilityDate" INTO v_AllowedToReviewDate
+
+         FROM dbo."Application"
+
+         WHERE "ApplicantGenId" = v_ApplicantGenId
+
+         AND "ApplicationSequence" = v_ApplicationSequence
+
+         AND "ScanEligibilityDate" IS NOT NULL;
+
+      ELSE
+
+         
+
+         SELECT v_DaysToScan * INTERVAL '1 day' + "ApplicationSignedDate" INTO v_AllowedToReviewDate
+
+         FROM dbo."Application" 
+
+         WHERE "ApplicantGenId" = v_ApplicantGenId
+
+         AND "ApplicationSequence" = v_ApplicationSequence
+
+         AND "ApplicationSignedDate" IS NOT NULL;
+
+      
+
+      END IF;
+
+      
+
+
+
+      UPDATE dbo."MonitoringSequence" 
+
+      SET "AllowedToReviewDate" = v_AllowedToReviewDate
+
+      WHERE "ApplicantGenId" = v_ApplicantGenId
+
+      AND "ApplicationSequence" = v_ApplicationSequence
+
+      AND v_AllowedToReviewDate IS NOT NULL;
+
+
+
+      UPDATE dbo."Application"  
+
+      SET "ScanEligibilityDate" = NULL,
+
+      "ScanAdminDate" = NULL 
+
+      WHERE "ApplicantGenId" = v_ApplicantGenId
+
+      AND "ApplicationSequence" = v_ApplicationSequence;
+
+
+
+      v_AllowedToReviewDate := NULL;
+
+      v_TriggerMonitoringInd := false;
+
+
+
+      FETCH NEXT FROM upCur INTO v_ApplicantGenId, v_ApplicationSequence;
+
+--      EXIT WHEN NOT FOUND;
+
+   END LOOP;
+
+
+
+   CLOSE upCur;
+
+
+
+   END;
+
+$function$
+

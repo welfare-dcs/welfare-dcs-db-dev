@@ -1,0 +1,99 @@
+CREATE OR REPLACE FUNCTION public.eligibilityofficewithcounty(_userid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE eligibilityoffices json;
+
+declare _eligibilityofficeid int[];
+
+declare _countyid int[];
+
+declare counties json;
+
+declare scanstatus json;
+
+declare eligibilityuser json;
+
+declare reviewbyeligibilityuser json;
+
+declare reviewbymonitoruser json;
+
+declare taskroles json;
+
+
+
+begin
+
+   
+
+select * from public.mytaskuserrole() into taskroles;
+
+
+
+select string_to_array(f.eligibilityofficerid,',') , string_to_array(f.countyid,',')  from fssauser f where f.id = _userid into _eligibilityofficeid,_countyid;
+
+   
+
+select Json_agg(t1) from (select t.id, t.description as "label" from 
+
+public.teligibilityoffice t where t.id = any(_eligibilityofficeid)
+
+--and t.status = 'A'
+
+order by t.description asc
+
+)t1 into eligibilityoffices;
+
+
+
+select Json_agg(t2) from (select rc."CountyName" as "lable",rc."CountyGenId" as "id" from dbo."ref_County" rc 
+
+where rc."CountyGenId" = any(_countyid)
+
+group by rc."CountyName",rc."CountyGenId" order by rc."CountyGenId" asc)t2 into counties;
+
+
+
+
+
+select Json_agg(t2) from (select rss."ScanStatusDescription" as "label", rss."ScanStatusGenId" as "id" from dbo."ref_ScanStatus" rss where rss."ScanStatusGenId" in (0,1,2,3,4,5,9,10) order by rss."ScanStatusGenId" asc)t2 into scanstatus;
+
+
+
+select Json_agg(t2) from (select f.id as "id", concat(f.lastname , ' ' ,f.firstname ) as "label" from public.fssauser f where _countyid::int[] && string_to_array(f.countyid, ',')::int[] and f.status not in ('D') order by f.lastname)t2 into eligibilityuser;
+
+
+
+
+
+select Json_agg(t2) from (select f.id as "id", concat(f.lastname , ' ' ,f.firstname ) as "label" from public.fssauser f where _countyid::int[] && string_to_array(f.countyid, ',')::int[] and f.status not in ('D') 
+
+and f.roleid in ((taskroles->>'eligibilityOfficeUUID')::uuid, (taskroles->>'eligibilityOfficeManagerUUID')::uuid)
+
+order by f.lastname)t2 into reviewbyeligibilityuser;
+
+
+
+select Json_agg(t2) from (select f.id as "id", concat(f.lastname , ' ' ,f.firstname ) as "label" from public.fssauser f where _countyid::int[] && string_to_array(f.countyid, ',')::int[] and f.status not in ('D') 
+
+and f.roleid in ((taskroles->>'monitorUUID')::uuid,(taskroles->>'monitoManagerUUID')::uuid)
+
+order by f.lastname)t2 into reviewbymonitoruser;
+
+
+
+--select concat(f.lastname , ' ' ,f.firstname ) from public.fssauser f ;
+
+
+
+return COALESCE(json_build_array(json_build_object('eligibilityoffices',coalesce(eligibilityoffices,'[]'),'counties',coalesce(counties,'[]'),'scanstatus',coalesce(scanstatus,'[]'),'eligibilityuser',coalesce(eligibilityuser,'[]'), 'reviewbyeligibilityuser',coalesce(reviewbyeligibilityuser,'[]'), 'reviewbymonitoruser',coalesce(reviewbymonitoruser,'[]'))),'[]');
+
+
+
+ END;
+
+ $function$
+

@@ -1,0 +1,89 @@
+CREATE OR REPLACE FUNCTION public.materialized_case_by_scanstatus(_casenumber integer, _casesequencenumber integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+begin
+
+
+
+if _casenumber = 0 and _casesequencenumber = 0 then
+
+
+
+DELETE FROM public.case_by_scanstatus;
+
+
+
+INSERT INTO public.case_by_scanstatus
+
+(applicationnumber, total)
+
+(
+
+  SELECT concat(aa."CaseNumber", '-', aa."CaseSeqNumber") ,
+
+    count(aa.*)
+
+   FROM ais_applicationversionscandetail aa
+
+  WHERE aa."ScanStatusCode" = ANY (ARRAY[279, 282, 3, 9])
+
+  GROUP BY (concat(aa."CaseNumber", '-', aa."CaseSeqNumber"))
+
+);
+
+
+
+else
+
+
+
+DELETE FROM public.case_by_scanstatus
+
+WHERE applicationnumber=concat(_casenumber,'-',_casesequencenumber);
+
+
+
+INSERT INTO public.case_by_scanstatus
+
+(applicationnumber, total)
+
+(
+
+  SELECT concat(aa."CaseNumber", '-', aa."CaseSeqNumber") ,
+
+    count(aa.*)
+
+   FROM ais_applicationversionscandetail aa
+
+  WHERE aa."ScanStatusCode" = ANY (ARRAY[279, 282, 3, 9])
+
+  and aa."CaseNumber" = _casenumber and aa."CaseSeqNumber" = _casesequencenumber
+
+  GROUP BY (concat(aa."CaseNumber", '-', aa."CaseSeqNumber"))
+
+);
+
+
+
+end if;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object(
+
+'data',coalesce(result,'[]')
+
+)),'[]');
+
+
+
+ END;
+
+ $function$
+

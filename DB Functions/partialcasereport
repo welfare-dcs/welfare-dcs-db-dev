@@ -1,0 +1,127 @@
+CREATE OR REPLACE FUNCTION public.partialcasereport()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+   
+
+select jsonb_agg(row_to_json(t1) ) from
+
+(select t.*,case when f."PriorityGenId" in (6,11,12) then 'OMW' else 'CCDF' end as "ProgramType" from
+
+(select a2."ApplicantGenId" as "CaseNumber"
+
+, a2."ApplicationSequence" as "CaseSeqNumber"
+
+, a."ApplicantGenId" as "CaseFileGenID"
+
+, a."ApplicantFirstName" as "FirstName"
+
+, a."ApplicantLastName" as "LastName"
+
+, rc."CountyName" as "CountyName"
+
+, a."ApplicantPhoneNumber" as "PhoneNumber"
+
+, coalesce(max(ab."CreatedDate"), max(db."CreatedDate")) as "DocUploadedDate"
+
+--, count(d."DocumentGenId") as "TotalDocumnetCount"
+
+, count(dp."DocumentGenId") as "TotalDocumentCount"
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"  and a2."ApplicationVersionStatusDescription" = 'Partial'
+
+join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+join dbo."ApplicantBatch" ab on a2."ApplicantGenId" = ab."ApplicantGenId" and a2."ApplicationSequence" = ab."ApplicationSequence"
+
+join dbo."DocumentBatch" db on ab."DocumentBatchGenId" = db."DocumentBatchGenId" and lower(db."BatchSourceId") = lower('OnlineApp')
+
+join dbo."Document" d on ab."ApplicantBatchGenId" = d."ApplicantBatchGenId"
+
+join dbo."DocumentPage" dp on dp."DocumentGenId" = d."DocumentGenId" and dp.conversion_status != 'SPLITTED_AS_MULTIPLE_FILE'
+
+where
+
+coalesce(ab."CreatedDate"::date, db."CreatedDate"::date) = current_date -1
+
+group by a2."ApplicantGenId" , a2."ApplicationSequence" , a."ApplicantGenId" , a."ApplicantFirstName" , a."ApplicantLastName" , rc."CountyGenId" , a."ApplicantPhoneNumber")t
+
+left join dbo."Family" f on t."CaseNumber" = f."ApplicantGenId" and t."CaseSeqNumber"  = f."ApplicationSequence"  
+
+and f."ApplicantInd"  is true order by t."CaseNumber")t1 into result;
+
+
+
+/*
+
+select jsonb_agg(row_to_json(t) ) from
+
+(
+
+select a2."ApplicantGenId" as "CaseNumber"
+
+, a2."ApplicationSequence" as "CaseSeqNumber"
+
+, a."ApplicantGenId" as "CaseFileGenID"
+
+, a."ApplicantFirstName" as "FirstName"
+
+, a."ApplicantLastName" as "LastName"
+
+, rc."CountyName" as "CountyName"
+
+, a."ApplicantPhoneNumber" as "PhoneNumber"
+
+, coalesce(max(ab."CreatedDate"), max(db."CreatedDate")) as "DocUploadedDate"
+
+, count(d."DocumentGenId") as "TotalDocumnetCount"
+
+from dbo."Applicant" a 
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId"  and a2."ApplicationVersionStatusDescription" = 'Partial'
+
+join dbo."Address" adr on a2."ApplicantGenId" = adr."ApplicantGenId" and  a2."ApplicationSequence" = adr."ApplicationSequence" and adr."addressInd" is true
+
+join dbo."ref_County" rc on adr."CountyGenId" = rc."CountyGenId"
+
+join dbo."ApplicantBatch" ab on a2."ApplicantGenId" = ab."ApplicantGenId" and a2."ApplicationSequence" = ab."ApplicationSequence" 
+
+join dbo."DocumentBatch" db on ab."DocumentBatchGenId" = db."DocumentBatchGenId" and lower(db."BatchSourceId") = lower('OnlineApp')
+
+join dbo."Document" d on ab."ApplicantBatchGenId" = d."ApplicantBatchGenId" 
+
+where 
+
+coalesce(ab."CreatedDate"::date, db."CreatedDate"::date) = current_date -1
+
+group by a2."ApplicantGenId" , a2."ApplicationSequence" , a."ApplicantGenId" , a."ApplicantFirstName" , a."ApplicantLastName" , rc."CountyGenId" , a."ApplicantPhoneNumber" 
+
+)t into result;
+
+*/
+
+
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

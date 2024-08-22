@@ -1,0 +1,53 @@
+CREATE OR REPLACE FUNCTION public.eligibilitymonitorerrornotes(_casenumber character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+   select Json_agg(row_to_json(t1)) from (
+
+select 
+
+concat('Error Item: ',et.errornumber,'.',et.sort,' ',et."Error",' Notes: ',e."Comment") as "error_notes"
+
+, e."CreateDate" as "date"
+
+, coalesce(f.username,'QASE System') as "createdby"
+
+, concat(et.errornumber,'.',et.sort,' ',et."Error") as "error_item"
+
+, e."Comment" as "notes"
+
+from dbo."Error" e 
+
+join dbo."MonitoringSequence" ms on e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId"
+
+join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left join public.fssauser f on e."CreatedBy" = f.id
+
+where concat(ms."ApplicantGenId",'-',ms."ApplicationSequence") = _casenumber
+
+   )t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+
+
+ $function$
+

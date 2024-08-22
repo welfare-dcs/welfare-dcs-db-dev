@@ -1,0 +1,33 @@
+CREATE OR REPLACE FUNCTION public.rptrolemappedusers(_id uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+   select Json_agg(row_to_json(t1)) from (SELECT id, username, title, firstname, lastname, profilephoto
+
+FROM public.fssauser where roleid = _id order by createdon desc)t1 into result;
+
+
+
+RETURN coalesce(result,'[]');
+
+
+
+
+
+ END;
+
+
+
+ $function$
+

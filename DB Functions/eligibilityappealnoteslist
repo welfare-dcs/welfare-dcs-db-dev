@@ -1,0 +1,45 @@
+CREATE OR REPLACE FUNCTION public.eligibilityappealnoteslist(_errorgenid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+   select Json_agg(row_to_json(t1)) from (
+
+   select e.appealnote as "note"
+
+   , e.createdate as "date"
+
+   , f.username as "createdby" 
+
+   from public.eligibilityappealnotes e
+
+inner join public.fssauser f on e.createdby = f.id
+
+where 
+
+e.errorgenid = _errorgenid
+
+   )t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+
+
+ $function$
+

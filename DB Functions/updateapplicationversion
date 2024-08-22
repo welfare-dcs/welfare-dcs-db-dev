@@ -1,0 +1,47 @@
+CREATE OR REPLACE FUNCTION public.updateapplicationversion()
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+DECLARE row RECORD;
+
+begin
+
+
+
+FOR row in select a.* from public.applicationversions a
+
+inner join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId" and a."ApplicationSequence" = a2."ApplicationSequence" 
+
+where a2."ApplicationVersionStatusDescription" is null
+
+order by a."ApplicantGenId" asc
+
+
+
+  loop
+
+   
+
+     update dbo."Application" set "ApplicationVersionStatusDescription" = row."ApplicationVersionStatusDescription" 
+
+    where "ApplicantGenId" = row."ApplicantGenId" and "ApplicationSequence" = row."ApplicationSequence";
+
+
+
+end loop;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

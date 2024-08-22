@@ -1,0 +1,59 @@
+CREATE OR REPLACE FUNCTION public.aisreportlastreporteddate(_applicantgenid integer, _applicationsequence integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select a2."ApplicantGenId"
+
+, a2."ApplicationSequence"
+
+, ms."MonitoringSequenceGenId"
+
+, concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "CaseNo"
+
+, concat(a."ApplicantFirstName", ' ', a."ApplicantLastName") as "ApplicantName" 
+
+, ms."UpdatedDate" as "LastMonitoringDate"
+
+, case 
+
+when a2."ScanEligibilityDate" is null then a2."ScanAdminDate"::date + interval '30 day'
+
+else a2."ScanEligibilityDate"::date + interval '14 day'
+
+end as "ResponseDueDate"
+
+from dbo."Application" a2 
+
+join dbo."Applicant" a on a2."ApplicantGenId" = a."ApplicantGenId" 
+
+left join dbo."MonitoringSequence" ms on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence" 
+
+where a2."ApplicantGenId" = _applicantgenid
+
+and a2."ApplicationSequence" = _applicationsequence 
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

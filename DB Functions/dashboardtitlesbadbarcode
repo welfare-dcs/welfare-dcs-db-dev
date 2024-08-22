@@ -1,0 +1,63 @@
+CREATE OR REPLACE FUNCTION public.dashboardtitlesbadbarcode(_intakeagency character varying, _county character varying, _userid character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+declare badbarcode int4;
+
+
+
+begin
+
+
+
+select
+
+count(t)
+
+from
+
+(
+
+select
+
+sdi.id as "id"
+
+, tes.description  as "eligiblity_office"
+
+, sdi."CreatedDate" as "scan_date"
+
+, sdi."RemoteSite" as remotesite
+
+from dbo."ScannedDocsIndex" sdi
+
+inner join dbo."BadBarCode" bbc on sdi.id = bbc."DocumentIndexId"
+
+inner join teligibilityoffice tes on tes.description = sdi."RemoteSite"
+
+and case when _intakeagency ='' then true else tes.id = any(_intakeagency::int[]) end
+
+where
+
+sdi."DocumentProcessStatus" = 'BAD_BAR_CODE'
+
+and sdi."DeletedDate" is null
+
+and sdi."CreatedDate"::date between current_date - 730 and current_date
+
+)t
+
+into badbarcode;
+
+
+
+RETURN json_build_object('badbarcode',coalesce(badbarcode,0));
+
+
+
+ END;
+
+ $function$
+

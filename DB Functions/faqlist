@@ -1,0 +1,63 @@
+CREATE OR REPLACE FUNCTION public.faqlist(_id integer DEFAULT 0)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+select 
+
+f.* 
+
+, (
+
+array_to_string(
+
+array(
+
+select f2.title from public.faqcategory f2 
+
+where 
+
+string_to_array(f2.id::character varying ,',') && string_to_array(f.category,',')
+
+and f2.status is true
+
+)
+
+,',')
+
+) as "categories"
+
+from public.faq f
+
+where 
+
+case when _id = 0 then true else _id = f.id end 
+
+and f.status is true
+
+order by f."order" asc, f."UpdateDate" desc
+
+)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

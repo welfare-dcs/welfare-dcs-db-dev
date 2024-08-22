@@ -1,0 +1,89 @@
+CREATE OR REPLACE FUNCTION public.casesamplingtable(_offset integer, _limit integer, _errorcategory character varying, _incomesource character varying, _county character varying, _fromdate character varying, _todate character varying, _sortcolumn character varying, _sortorder character varying, _scanstatus character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+select Json_agg(row_to_json(t1)) from (
+
+SELECT
+
+concat(app."ApplicantGenId",'-',app."ApplicationSequence") as "casenumber"
+
+, a."ApplicantFirstName" as "applicantfistname"
+
+, a."ApplicantLastName" as "applicantlastname"
+
+, a."ApplicantMiddleInitial" as "applicantmiddlename"
+
+, app."SubsidyBeginDate" as "subsidybegindate"
+
+, app."SubsidyEndDate" as "subsidyenddate"
+
+,ms."ReviewedBy" ,ms."ReviewedDate" ,fsu.firstname,fsu.lastname
+
+from dbo."Application" app
+
+inner join dbo."MonitoringSequence" ms
+
+on  ms."ApplicantGenId" = app."ApplicantGenId" and ms."ApplicationSequence" = app."ApplicationSequence"
+
+and app."ApplicationSignedInd" is true and app."SubsidyBeginDate" > _fromdate::DATE
+
+and app."SubsidyEndDate" <= _todate::DATE
+
+and app."IsLimitedEligibility" is not true
+
+inner join dbo."Applicant" a on ms."ApplicantGenId" = a."ApplicantGenId"
+
+join dbo."Address" a3 on app."ApplicantGenId" = a3."ApplicantGenId" and app."ApplicationSequence" = a3."ApplicationSequence" and a3."addressInd" is true
+
+inner join dbo."ref_County" rc on a3."CountyGenId" = rc."CountyGenId"
+
+inner join dbo."Family" f on f."ApplicantGenId" = a."ApplicantGenId" and f."ApplicationSequence" = app."ApplicationSequence" and f."ApplicantInd" is true and f."IndividualStatusDescription" not in ('Not Set','Removed','Waiting List')
+
+left outer join dbo."FamilyIncome" fi ON f."ApplicantGenId" = fi."ApplicantGenId" AND f."ApplicationSequence" = fi."ApplicationSequence" AND f."IndividualGenId" = fi."IndividualGenId"
+
+left outer join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId"
+
+left join public."ErrorType" et on e."ErrorTypeGenId" = et."ErrorTypeGenId"
+
+left join fssauser fsu on ms."ReviewedBy" = fsu.id
+
+inner join dbo."ref_ScanStatus" rss on app."ScanStatusGenId" = rss."ScanStatusGenId"
+
+where case when _errorcategory = '' then true else et."errorCategoryGenId" = any(_errorcategory ::int[]) end
+
+and case when _incomesource = '' then true else lower(fi."IncomeSourceDescription") = any(_incomesource::character varying[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county ::int[]) end
+
+and case when _scanStatus = '' then true else rss."ScanStatusGenId" = any(_scanStatus::int[]) end
+
+group by casenumber,applicantfistname,applicantlastname,applicantmiddlename,subsidybegindate,subsidyenddate
+
+,ms."ReviewedBy" ,ms."ReviewedDate" ,fsu.firstname,fsu.lastname
+
+ORDER BY RANDOM()
+
+limit _limit)t1 into result;
+
+
+
+RETURN COALESCE(result,'[]');
+
+
+
+ END;
+
+ $function$
+

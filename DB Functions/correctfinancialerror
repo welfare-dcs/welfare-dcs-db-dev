@@ -1,0 +1,37 @@
+CREATE OR REPLACE FUNCTION public.correctfinancialerror(_monitoringsequencegenid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+DECLARE result json;
+
+
+
+begin
+
+
+
+   update dbo."Error" set  "UpdateDate"=now(), "UpdatedBy"=0, 
+
+   --"FixDate"=now(),"RemovedByPolicy"=now(), "CannotBeCorrected"=now(),
+
+"Comment"='Error Unmarked By OCR.', "OcrMarked"='Y', errorstatus=false
+
+where errorstatus=true and "MonitoringSequenceGenId" = _monitoringsequencegenid and "ErrorTypeGenId" in (56,57);
+
+
+
+RETURN COALESCE(json_build_array(json_build_object(
+
+'data',coalesce(result,'[]')
+
+)),'[]');
+
+
+
+ END;
+
+ $function$
+
