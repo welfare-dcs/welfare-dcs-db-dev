@@ -1,0 +1,362 @@
+DROP FUNCTION public.appealsqueuetiles( character varying,  character varying,  character varying,  character varying,  character varying,  character varying);
+CREATE OR REPLACE FUNCTION public.appealsqueuetiles(_intakeagency character varying, _county character varying, _status character varying, _startdate character varying, _enddate character varying, _lifecyclecompleted character varying)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+
+
+declare totalappealserror int4;
+
+declare totalappealspending int4;
+
+declare totalappealsapproved int4;
+
+declare totalappealsedenied int4;
+declare globalId14 int4;
+declare globalId12 int4;
+
+
+begin
+
+
+select g."ruleValue"::int into globalId14 from public.globals g where g."globalId" = 14;
+  select g."ruleValue"::int into globalId12 from public.globals g where g."globalId" = 12;
+select
+
+count(t)
+
+from
+
+(
+
+select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName"),' ',initcap(a."ApplicantLastName")) as "applicantname"
+
+, a2."ApplicationSignedDate" as "applicationdate"
+
+, e."CreateDate"::date + interval '13 day' as "duedate"
+, (case when a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval >= current_date then 'No' else 'Yes' end) as lifecyclecompleted
+, (case when (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < current_date) and (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < a2."ScanStatusDate") then a2."ScanStatusDate" else null end) as "trigger_date"
+, (case when (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < current_date) and (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < a2."ScanStatusDate") then a2."ScanStatusDate" ::date + (globalId14 || ' days')::interval else null end) as "trigger_due_date"
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, ms."MonitoringSequenceGenId"  as "monitorsequencegenid"
+
+, ms."ReviewedDate" as "reviewed_date"
+
+, ms."ReviewedBy"
+
+,fsu.firstname,fsu.lastname
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId" and a2."ScanStatusGenId" in (4) and a2."TerminationDate" is null and a2."IsLimitedEligibility" is not true
+
+join dbo."MonitoringSequence" ms on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy')
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on a3.errorid = e."ErrorGenId"
+
+left join dbo."ReviewLock" r1 on  r1."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."ReviewHistory" rh on rh."ReviewHistoryGenId" = r1."ReviewHistoryGenId"
+
+left join fssauser fsu on rh."UserGenId" = fsu.id
+
+left join public.case_by_scanstatus cbs on  cbs.applicationnumber = concat(ms."ApplicantGenId",'-',ms."ApplicationSequence")
+
+where
+
+case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+and case when _lifecyclecompleted = '{true,false}' then true
+when _lifecyclecompleted = '{false,true}' then true
+when _lifecyclecompleted = '{true}' then a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < current_date
+when _lifecyclecompleted = '{false}' then a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval >= current_date end
+and case when _county = '' then true else rc."CountyGenId" = any(_county::int[]) end
+
+group by a."ApplicantFirstName",a."ApplicantLastName",a2."ApplicationSignedDate",e."CreateDate",teo.description,rc."CountyName",a3."AppealAcceptDate",a3."AppealDenyDate", ms."ReviewedDate", a2."ApplicantGenId",a2."ApplicationSequence",ms."MonitoringSequenceGenId" ,fsu.firstname,fsu.lastname,ms."ReviewedBy"
+
+)t
+
+into totalappealserror;
+
+
+
+select
+
+count(t)
+
+from
+
+(
+
+select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName"),' ',initcap(a."ApplicantLastName")) as "applicantname"
+
+, a2."ApplicationSignedDate" as "applicationdate"
+
+, e."CreateDate"::date + interval '13 day' as "duedate"
+, (case when a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval >= current_date then 'No' else 'Yes' end) as lifecyclecompleted
+, (case when (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < current_date) and (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < a2."ScanStatusDate") then a2."ScanStatusDate" else null end) as "trigger_date"
+, (case when (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < current_date) and (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < a2."ScanStatusDate") then a2."ScanStatusDate" ::date + (globalId14 || ' days')::interval else null end) as "trigger_due_date"
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, ms."MonitoringSequenceGenId"  as "monitorsequencegenid"
+
+, ms."ReviewedDate" as "reviewed_date"
+
+, ms."ReviewedBy"
+
+,fsu.firstname,fsu.lastname
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId" and a2."ScanStatusGenId" in (4) and a2."TerminationDate" is null and a2."IsLimitedEligibility" is not true
+
+join dbo."MonitoringSequence" ms on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy')
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on a3.errorid = e."ErrorGenId"
+
+left join dbo."ReviewLock" r1 on  r1."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."ReviewHistory" rh on rh."ReviewHistoryGenId" = r1."ReviewHistoryGenId"
+
+left join fssauser fsu on rh."UserGenId" = fsu.id
+
+left join public.case_by_scanstatus cbs on  cbs.applicationnumber = concat(ms."ApplicantGenId",'-',ms."ApplicationSequence")
+
+where
+
+case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county::int[]) end
+and case when _lifecyclecompleted = '{true,false}' then true
+when _lifecyclecompleted = '{false,true}' then true
+when _lifecyclecompleted = '{true}' then a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < current_date
+when _lifecyclecompleted = '{false}' then a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval >= current_date end
+and a3."AppealDate" is not null and a3."AppealAcceptDate" is null and a3."AppealDenyDate" is null
+
+group by a."ApplicantFirstName",a."ApplicantLastName",a2."ApplicationSignedDate",e."CreateDate",teo.description,rc."CountyName",a3."AppealAcceptDate",a3."AppealDenyDate", ms."ReviewedDate", a2."ApplicantGenId",a2."ApplicationSequence",ms."MonitoringSequenceGenId" ,fsu.firstname,fsu.lastname,ms."ReviewedBy"
+
+)t
+
+into totalappealspending;
+
+
+
+select
+
+count(t)
+
+from
+
+(
+
+select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName"),' ',initcap(a."ApplicantLastName")) as "applicantname"
+
+, a2."ApplicationSignedDate" as "applicationdate"
+
+, e."CreateDate"::date + interval '13 day' as "duedate"
+, (case when a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval >= current_date then 'No' else 'Yes' end) as lifecyclecompleted
+, (case when (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < current_date) and (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < a2."ScanStatusDate") then a2."ScanStatusDate" else null end) as "trigger_date"
+, (case when (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < current_date) and (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < a2."ScanStatusDate") then a2."ScanStatusDate" ::date + (globalId14 || ' days')::interval else null end) as "trigger_due_date"
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, ms."MonitoringSequenceGenId"  as "monitorsequencegenid"
+
+, ms."ReviewedDate" as "reviewed_date"
+
+, ms."ReviewedBy"
+
+,fsu.firstname,fsu.lastname
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId" and a2."ScanStatusGenId" in (4) and a2."TerminationDate" is null and a2."IsLimitedEligibility" is not true
+
+join dbo."MonitoringSequence" ms on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy')
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on a3.errorid = e."ErrorGenId"
+
+left join dbo."ReviewLock" r1 on  r1."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."ReviewHistory" rh on rh."ReviewHistoryGenId" = r1."ReviewHistoryGenId"
+
+left join fssauser fsu on rh."UserGenId" = fsu.id
+
+left join public.case_by_scanstatus cbs on  cbs.applicationnumber = concat(ms."ApplicantGenId",'-',ms."ApplicationSequence")
+
+where
+
+case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county::int[]) end
+and case when _lifecyclecompleted = '{true,false}' then true
+when _lifecyclecompleted = '{false,true}' then true
+when _lifecyclecompleted = '{true}' then a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < current_date
+when _lifecyclecompleted = '{false}' then a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval >= current_date end
+and a3."AppealAcceptDate" is not null
+
+group by a."ApplicantFirstName",a."ApplicantLastName",a2."ApplicationSignedDate",e."CreateDate",teo.description,rc."CountyName",a3."AppealAcceptDate",a3."AppealDenyDate", ms."ReviewedDate", a2."ApplicantGenId",a2."ApplicationSequence",ms."MonitoringSequenceGenId" ,fsu.firstname,fsu.lastname,ms."ReviewedBy"
+
+)t
+
+into totalappealsapproved;
+
+
+
+select
+
+count(t)
+
+from
+
+(
+
+select
+
+concat(a2."ApplicantGenId",'-',a2."ApplicationSequence") as "casenumber"
+
+, concat(initcap(a."ApplicantFirstName"),' ',initcap(a."ApplicantLastName")) as "applicantname"
+
+, a2."ApplicationSignedDate" as "applicationdate"
+
+, e."CreateDate"::date + interval '13 day' as "duedate"
+, (case when a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval >= current_date then 'No' else 'Yes' end) as lifecyclecompleted
+, (case when (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < current_date) and (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < a2."ScanStatusDate") then a2."ScanStatusDate" else null end) as "trigger_date"
+, (case when (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < current_date) and (a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < a2."ScanStatusDate") then a2."ScanStatusDate" ::date + (globalId14 || ' days')::interval else null end) as "trigger_due_date"
+, teo.description as "eligibilityoffice"
+
+, rc."CountyName" as "county"
+
+, a3."AppealAcceptDate" as "appealacceptdate"
+
+, a3."AppealDenyDate" as "appealdenydate"
+
+, ms."MonitoringSequenceGenId"  as "monitorsequencegenid"
+
+, ms."ReviewedDate" as "reviewed_date"
+
+, ms."ReviewedBy"
+
+,fsu.firstname,fsu.lastname
+
+from dbo."Applicant" a
+
+join dbo."Application" a2 on a."ApplicantGenId" = a2."ApplicantGenId" and a2."ScanStatusGenId" in (4) and a2."TerminationDate" is null and a2."IsLimitedEligibility" is not true
+
+join dbo."MonitoringSequence" ms on ms."ApplicantGenId" = a2."ApplicantGenId" and ms."ApplicationSequence" = a2."ApplicationSequence"
+
+inner join dbo."Error" e on ms."MonitoringSequenceGenId" = e."MonitoringSequenceGenId" and e."ErrorCategoryGenId" = 2 and e."CreateDate"::date between to_date(_startdate, 'dd-mm-yyyy') and  to_date(_enddate, 'dd-mm-yyyy')
+
+join dbo."Address" a4 on a2."ApplicantGenId" = a4."ApplicantGenId" and a2."ApplicationSequence" = a4."ApplicationSequence" and a4."addressInd" is true
+
+join dbo."ref_County" rc on a4."CountyGenId" = rc."CountyGenId"
+
+join dbo."IntakeAgency_County" iac on a4."CountyGenId" = iac."CountyGenId"
+
+inner join public.teligibilityoffice teo on iac.eligibleofficeid = teo.id
+
+inner join dbo."Appeals" a3 on a3.errorid = e."ErrorGenId"
+
+left join dbo."ReviewLock" r1 on  r1."ApplicantGenId" = a."ApplicantGenId"
+
+left join dbo."ReviewHistory" rh on rh."ReviewHistoryGenId" = r1."ReviewHistoryGenId"
+
+left join fssauser fsu on rh."UserGenId" = fsu.id
+
+left join public.case_by_scanstatus cbs on  cbs.applicationnumber = concat(ms."ApplicantGenId",'-',ms."ApplicationSequence")
+
+where
+
+case when coalesce(cbs.total,0) > 0 and coalesce(a2."ToBeScannedReason",0) in (343) then false else true end
+
+and case when _intakeagency = '' then true else teo.id = any(_intakeagency ::int[]) end
+
+and case when _county = '' then true else rc."CountyGenId" = any(_county::int[]) end
+and case when _lifecyclecompleted = '{true,false}' then true
+when _lifecyclecompleted = '{false,true}' then true
+when _lifecyclecompleted = '{true}' then a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval < current_date
+when _lifecyclecompleted = '{false}' then a2."ApplicationSignedDate"::date + (globalId12 || 'days'):: interval >= current_date end
+and a3."AppealDenyDate" is not null
+
+group by a."ApplicantFirstName",a."ApplicantLastName",a2."ApplicationSignedDate",e."CreateDate",teo.description,rc."CountyName",a3."AppealAcceptDate",a3."AppealDenyDate", ms."ReviewedDate", a2."ApplicantGenId",a2."ApplicationSequence",ms."MonitoringSequenceGenId" ,fsu.firstname,fsu.lastname,ms."ReviewedBy"
+
+)t
+
+into totalappealsedenied;
+
+
+
+RETURN COALESCE(json_build_array(json_build_object('totalappealserror',coalesce(totalappealserror,'0'),'totalappealspending',coalesce(totalappealspending,'0'),'totalappealsapproved',coalesce(totalappealsapproved,'0'),'totalappealsedenied',coalesce(totalappealsedenied,'0'))),'[]');
+
+
+
+ END;
+
+ $function$
+;

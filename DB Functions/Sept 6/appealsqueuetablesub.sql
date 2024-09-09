@@ -1,0 +1,39 @@
+DROP FUNCTION public.appealsqueuetablesub(integer);
+CREATE OR REPLACE FUNCTION public.appealsqueuetablesub(_monitorsequencegenid integer)
+ RETURNS json
+ LANGUAGE plpgsql
+AS $function$
+
+DECLARE result json;
+
+begin
+
+select Json_agg(row_to_json(t1)) from (
+select 
+--e."Comment" as "error"
+--et."Error" as "error"
+concat(et.errornumber,concat('.',concat(et.sort,concat(' ', et."Error")))) as "error"
+, e."CreateDate"::date as "errordate"
+, a."AppealDate" as "appealdate"
+, case 
+when a."AppealAcceptDate" is not null then 'Accepted'
+when a."AppealDenyDate" is not null then 'denied'
+end as "appealstatus"
+, rc."CountyName" as "county"
+from dbo."Error" e
+inner join dbo."Appeals" a on e."MonitoringSequenceGenId" = a."MonitoringSequenceGenId" 
+inner join dbo."MonitoringSequence" ms on e."MonitoringSequenceGenId" = ms."MonitoringSequenceGenId" 
+inner join dbo."Applicant" a2 on a2."ApplicantGenId" = ms."ApplicantGenId"
+left join dbo."ref_County" rc on a2."CountyGenId" = rc."CountyGenId"
+left join public."ErrorType" et on et."ErrorTypeGenId" = e."ErrorTypeGenId"
+where 
+e."MonitoringSequenceGenId" = _monitorsequencegenid
+and e."ApprovedInd" is not true and a."AppealAcceptDate" is null and a."AppealDenyDate" is null
+group by error,errordate,appealdate,appealstatus,county
+)t1 into result;
+
+RETURN COALESCE(result,'[]');
+
+ END;
+ $function$
+;
